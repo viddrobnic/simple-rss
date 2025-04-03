@@ -1,10 +1,13 @@
 use crossterm::event::KeyCode;
 use ratatui::widgets::ListState;
 
+use crate::widget::ContentState;
+
 #[derive(Default)]
 pub struct AppState {
     running: bool,
     items_state: ListState,
+    content_state: ContentState,
     active: ActiveState,
 }
 
@@ -29,9 +32,22 @@ impl AppState {
         &mut self.items_state
     }
 
+    pub fn is_items_list_active(&self) -> bool {
+        matches!(self.active, ActiveState::ItemsList)
+    }
+
+    pub fn is_content_active(&self) -> bool {
+        matches!(self.active, ActiveState::Content)
+    }
+
+    pub fn content_state(&self) -> &ContentState {
+        &self.content_state
+    }
+
     pub fn handle_event(&mut self, event: KeyCode) {
-        let beh = match self.active {
+        let beh = match &self.active {
             ActiveState::ItemsList => self.handle_items_list_event(event),
+            ActiveState::Content => self.handle_content_event(event),
         };
 
         if beh == EventBehavior::Ignore {
@@ -53,6 +69,22 @@ impl AppState {
                 self.items_state.select_previous();
                 EventBehavior::Ignore
             }
+            KeyCode::Char(' ') | KeyCode::Enter => {
+                self.active = ActiveState::Content;
+                self.content_state = ContentState::Loading;
+
+                EventBehavior::Ignore
+            }
+            _ => EventBehavior::Handle,
+        }
+    }
+
+    fn handle_content_event(&mut self, event: KeyCode) -> EventBehavior {
+        match event {
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.active = ActiveState::ItemsList;
+                EventBehavior::Ignore
+            }
             _ => EventBehavior::Handle,
         }
     }
@@ -62,4 +94,5 @@ impl AppState {
 pub enum ActiveState {
     #[default]
     ItemsList,
+    Content,
 }

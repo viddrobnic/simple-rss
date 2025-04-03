@@ -10,13 +10,18 @@ use ratatui::{
 use crate::data::Item;
 
 pub struct ItemList<'a> {
+    selected: bool,
     data: &'a [Item],
     list_state: &'a mut ListState,
 }
 
 impl<'a> ItemList<'a> {
-    pub fn new(data: &'a [Item], list_state: &'a mut ListState) -> Self {
-        Self { data, list_state }
+    pub fn new(selected: bool, data: &'a [Item], list_state: &'a mut ListState) -> Self {
+        Self {
+            selected,
+            data,
+            list_state,
+        }
     }
 }
 
@@ -25,9 +30,12 @@ impl Widget for ItemList<'_> {
     where
         Self: Sized,
     {
-        let block = Block::bordered()
+        let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title(Line::from("Channels"));
+        if !self.selected {
+            block = block.border_style(Color::Gray)
+        }
 
         // List
         let list = List::new(self.data.iter().enumerate().map(|(idx, it)| {

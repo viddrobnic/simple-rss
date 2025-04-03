@@ -8,7 +8,7 @@ use crate::{
     data::{Channel, Data, Item},
     event::EventHandler,
     state::AppState,
-    widget::ItemList,
+    widget::{Content, ContentState, ItemList},
 };
 
 pub struct App {
@@ -72,11 +72,17 @@ impl App {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Ratio(1, 3), Constraint::Ratio(2, 3)])
+            .spacing(1)
             .split(frame.area());
 
-        frame.render_widget(
-            ItemList::new(&self.data.items, self.state.items_state_mut()),
-            layout[0],
+        let item_list = ItemList::new(
+            self.state.is_items_list_active(),
+            &self.data.items,
+            self.state.items_state_mut(),
         );
+        frame.render_widget(item_list, layout[0]);
+
+        let content = Content::new(self.state.is_content_active(), self.state.content_state());
+        frame.render_widget(content, layout[1]);
     }
 }
