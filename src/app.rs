@@ -1,4 +1,4 @@
-use crossterm::event::{self, Event};
+use crossterm::event::Event;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Direction, Layout},
@@ -6,11 +6,16 @@ use ratatui::{
 
 use crate::{
     data::{Channel, Data, Item},
+    event::EventHandler,
+    state::AppState,
     widget::ItemList,
 };
 
 pub struct App {
     data: Data,
+
+    state: AppState,
+    events: EventHandler,
 }
 
 impl App {
@@ -32,27 +37,46 @@ impl App {
                         link: None,
                         read: false,
                     };
-                    10
+                    50
                 ],
             },
+            state: AppState::default(),
+            events: EventHandler::new(),
         }
     }
 
-    pub fn run(&mut self, mut terminal: DefaultTerminal) -> anyhow::Result<()> {
-        loop {
+    pub async fn run(&mut self, mut terminal: DefaultTerminal) -> anyhow::Result<()> {
+        self.state.set_running();
+        while self.state.is_running() {
             terminal.draw(|t| self.render(t))?;
-            if matches!(event::read()?, Event::Key(_)) {
-                break Ok(());
+            match self.events.next().await? {
+                crate::event::Event::Tick => self.tick(),
+                crate::event::Event::Crossterm(event) => {
+                    if let Event::Key(key_event) = event {
+                        self.handle_keyboard(key_event)
+                    }
+                }
             }
         }
+
+        Ok(())
     }
 
-    fn render(&self, frame: &mut Frame) {
+    fn tick(&mut self) {}
+
+    fn handle_keyboard(&mut self, event: crossterm::event::KeyEvent) {
+        self.state.handle_event(event.code);
+    }
+
+    fn render(&mut self, frame: &mut Frame) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Ratio(1, 3), Constraint::Ratio(2, 3)])
             .split(frame.area());
 
-        frame.render_widget(ItemList::new(&self.data.items), layout[0]);
+        frame.render_widget(
+            ItemList::new(&self.data.items, self.state.items_state_mut()),
+            layout[0],
+        );
     }
 }

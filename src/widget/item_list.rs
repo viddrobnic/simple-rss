@@ -1,18 +1,22 @@
 use ratatui::{
-    style::{Color, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Text},
-    widgets::{Block, BorderType, List, ListItem, Widget},
+    widgets::{
+        Block, BorderType, List, ListItem, ListState, Scrollbar, ScrollbarOrientation,
+        ScrollbarState, StatefulWidget, Widget,
+    },
 };
 
 use crate::data::Item;
 
 pub struct ItemList<'a> {
     data: &'a [Item],
+    list_state: &'a mut ListState,
 }
 
 impl<'a> ItemList<'a> {
-    pub fn new(data: &'a [Item]) -> Self {
-        Self { data }
+    pub fn new(data: &'a [Item], list_state: &'a mut ListState) -> Self {
+        Self { data, list_state }
     }
 }
 
@@ -25,17 +29,28 @@ impl Widget for ItemList<'_> {
             .border_type(BorderType::Rounded)
             .title(Line::from("Channels"));
 
-        let list = List::new(
-            self.data
-                .iter()
-                .map(|it| item_to_list_item(it, area.width as usize)),
-        )
-        .block(block);
-        list.render(area, buf);
+        // List
+        let list = List::new(self.data.iter().enumerate().map(|(idx, it)| {
+            item_to_list_item(
+                it,
+                self.list_state.selected() == Some(idx),
+                area.width as usize,
+            )
+        }))
+        .block(block)
+        .highlight_style(Style::default().bg(Color::Blue));
+
+        StatefulWidget::render(list, area, buf, self.list_state);
+
+        // Scrollbar
+        let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+        let mut bar_state =
+            ScrollbarState::new(self.data.len()).position(self.list_state.selected().unwrap_or(0));
+        StatefulWidget::render(scroll_bar, area, buf, &mut bar_state);
     }
 }
 
-fn item_to_list_item(it: &Item, width: usize) -> ListItem {
+fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
     let opts = textwrap::Options::new(width)
         .initial_indent("[ ] ")
         .subsequent_indent("    ")
@@ -44,10 +59,15 @@ fn item_to_list_item(it: &Item, width: usize) -> ListItem {
     let mut text = Text::default();
 
     let title = textwrap::wrap(&it.title, &opts);
+    let title_col = if selected {
+        Color::LightGreen
+    } else {
+        Color::Green
+    };
     text.extend(
         title
             .iter()
-            .map(|s| Line::from(s.clone()).bold().fg(Color::Green)),
+            .map(|s| Line::from(s.clone()).bold().fg(title_col)),
     );
 
     let Some(desc) = &it.description else {
