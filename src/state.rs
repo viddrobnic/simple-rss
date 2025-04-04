@@ -1,25 +1,38 @@
 use crossterm::event::KeyCode;
 use ratatui::widgets::ListState;
 
-use crate::widget::ContentState;
+use crate::{data::DataLoader, event::Event, widget::ContentState};
 
-#[derive(Default)]
 pub struct AppState {
     running: bool,
+
+    data_loader: DataLoader,
+
+    active: ActiveState,
+
     items_state: ListState,
     content_state: ContentState,
-    active: ActiveState,
 }
 
 /// Returned by handle event function on a state type.
 /// This determines how the event should be handled by the parent.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum EventBehavior {
-    Handle,
+    Handle(Event),
     Ignore,
 }
 
 impl AppState {
+    pub fn new(data_loader: DataLoader) -> Self {
+        Self {
+            running: false,
+            data_loader,
+            active: ActiveState::default(),
+            items_state: ListState::default(),
+            content_state: ContentState::default(),
+        }
+    }
+
     pub fn is_running(&self) -> bool {
         self.running
     }
@@ -44,23 +57,44 @@ impl AppState {
         &self.content_state
     }
 
-    pub fn handle_event(&mut self, event: KeyCode) {
-        let beh = match &self.active {
+    pub fn handle_event(&mut self, event: Event) -> EventBehavior {
+        let beh = match self.active {
             ActiveState::ItemsList => self.handle_items_list_event(event),
             ActiveState::Content => self.handle_content_event(event),
         };
 
-        if beh == EventBehavior::Ignore {
-            return;
-        }
+        let EventBehavior::Handle(event) = beh else {
+            return EventBehavior::Ignore;
+        };
 
-        if KeyCode::Char('q') == event {
-            self.running = false;
+        match event {
+            Event::Keyboard(key_event) if key_event.code == KeyCode::Char('q') => {
+                self.running = false;
+                EventBehavior::Ignore
+            }
+            Event::Tick => {
+                if let ContentState::Loading(t) = self.content_state {
+                    let (t, _) = t.overflowing_add(1);
+                    self.content_state = ContentState::Loading(t);
+                }
+
+                EventBehavior::Ignore
+            }
+            Event::LoadedItem(text) => {
+                self.content_state = ContentState::Data(text);
+                EventBehavior::Ignore
+            }
+            Event::Keyboard(_) => EventBehavior::Ignore,
+            e => EventBehavior::Handle(e),
         }
     }
 
-    fn handle_items_list_event(&mut self, event: KeyCode) -> EventBehavior {
-        match event {
+    fn handle_items_list_event(&mut self, event: Event) -> EventBehavior {
+        let Event::Keyboard(key_event) = event else {
+            return EventBehavior::Handle(event);
+        };
+
+        match key_event.code {
             KeyCode::Down | KeyCode::Char('j') => {
                 self.items_state.select_next();
                 EventBehavior::Ignore
@@ -70,22 +104,30 @@ impl AppState {
                 EventBehavior::Ignore
             }
             KeyCode::Char(' ') | KeyCode::Enter => {
-                self.active = ActiveState::Content;
-                self.content_state = ContentState::Loading;
+                let Some(selected) = self.items_state.selected() else {
+                    return EventBehavior::Ignore;
+                };
 
-                EventBehavior::Ignore
+                self.active = ActiveState::Content;
+                self.content_state = ContentState::Loading(0);
+
+                EventBehavior::Handle(Event::StartLoadingItem(selected))
             }
-            _ => EventBehavior::Handle,
+            _ => EventBehavior::Handle(Event::Keyboard(key_event)),
         }
     }
 
-    fn handle_content_event(&mut self, event: KeyCode) -> EventBehavior {
-        match event {
+    fn handle_content_event(&mut self, event: Event) -> EventBehavior {
+        let Event::Keyboard(key_event) = event else {
+            return EventBehavior::Handle(event);
+        };
+
+        match key_event.code {
             KeyCode::Char('q') | KeyCode::Esc => {
                 self.active = ActiveState::ItemsList;
                 EventBehavior::Ignore
             }
-            _ => EventBehavior::Handle,
+            _ => EventBehavior::Handle(Event::Keyboard(key_event)),
         }
     }
 }

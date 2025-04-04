@@ -1,13 +1,15 @@
+use html2text::from_read;
 use ratatui::{
     style::Color,
-    widgets::{Block, BorderType, Paragraph, Widget},
+    widgets::{Block, BorderType, Paragraph, Widget, Wrap},
 };
 
 #[derive(Default)]
 pub enum ContentState {
     #[default]
     Empty,
-    Loading,
+    Loading(u8),
+    Data(String),
 }
 
 pub struct Content<'a> {
@@ -30,9 +32,38 @@ impl<'a> Content<'a> {
         paragraph.render(area, buf);
     }
 
-    fn render_loading(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
+    fn render_loading(
+        self,
+        mut area: ratatui::prelude::Rect,
+        buf: &mut ratatui::prelude::Buffer,
+        tick: u8,
+    ) {
         let block = basic_block(self.selected);
         block.render(area, buf);
+
+        let paragraph = Paragraph::new(format!("Loading {tick}")).centered();
+
+        area.y = area.height / 2;
+        paragraph.render(area, buf);
+    }
+
+    fn render_data(
+        self,
+        area: ratatui::prelude::Rect,
+        buf: &mut ratatui::prelude::Buffer,
+        text: &str,
+    ) {
+        let block = basic_block(self.selected);
+
+        let text =
+            from_read(text.as_bytes(), area.width as usize).unwrap_or_else(|_| text.to_string());
+
+        let paragraph = Paragraph::new(text)
+            .block(block)
+            .wrap(Wrap { trim: true })
+            .scroll((0, 0));
+
+        paragraph.render(area, buf);
     }
 }
 
@@ -52,7 +83,8 @@ impl Widget for Content<'_> {
     {
         match self.state {
             ContentState::Empty => self.render_empty(area, buf),
-            ContentState::Loading => self.render_loading(area, buf),
+            ContentState::Loading(tick) => self.render_loading(area, buf, *tick),
+            ContentState::Data(text) => self.render_data(area, buf, text),
         }
     }
 }

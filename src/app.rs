@@ -1,18 +1,18 @@
-use crossterm::event::Event;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Direction, Layout},
 };
 
 use crate::{
-    data::{Channel, Data, Item},
-    event::EventHandler,
-    state::AppState,
-    widget::{Content, ContentState, ItemList},
+    data::{Channel, Data, DataLoader, Item},
+    event::{Event, EventHandler},
+    state::{AppState, EventBehavior},
+    widget::{Content, ItemList},
 };
 
 pub struct App {
     data: Data,
+    data_loader: DataLoader,
 
     state: AppState,
     events: EventHandler,
@@ -20,6 +20,9 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
+        let events = EventHandler::new();
+        let data_loader = DataLoader::new(events.get_sender());
+
         Self {
             data: Data {
                 channels: vec![
@@ -34,14 +37,15 @@ impl App {
                         id: "".to_string(),
                         title: "title".to_string(),
                         description: Some("very very long string asdf asdf asdf asdf asdf asdf asdf asdf asd fasdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asf asdf ".to_string()),
-                        link: None,
+                        link: Some("https://viddrobnic.com/blog/2025/writing-my-language-3/".to_string()),
                         read: false,
                     };
                     50
                 ],
             },
-            state: AppState::default(),
-            events: EventHandler::new(),
+            state: AppState::new(data_loader.clone()),
+            data_loader,
+            events,
         }
     }
 
@@ -49,23 +53,30 @@ impl App {
         self.state.set_running();
         while self.state.is_running() {
             terminal.draw(|t| self.render(t))?;
-            match self.events.next().await? {
-                crate::event::Event::Tick => self.tick(),
-                crate::event::Event::Crossterm(event) => {
-                    if let Event::Key(key_event) = event {
-                        self.handle_keyboard(key_event)
-                    }
-                }
-            }
+            let event = self.events.next().await?;
+            self.handle_event(event);
         }
 
         Ok(())
     }
 
-    fn tick(&mut self) {}
+    fn handle_event(&mut self, event: Event) {
+        let beh = self.state.handle_event(event);
+        let EventBehavior::Handle(event) = beh else {
+            return;
+        };
 
-    fn handle_keyboard(&mut self, event: crossterm::event::KeyEvent) {
-        self.state.handle_event(event.code);
+        if let Event::StartLoadingItem(idx) = event {
+            let Some(link) = &self.data.items[idx].link else {
+                return;
+            };
+
+            let dl = self.data_loader.clone();
+            let link = link.clone();
+            tokio::spawn(async move {
+                dl.load_item(&link).await;
+            });
+        }
     }
 
     fn render(&mut self, frame: &mut Frame) {

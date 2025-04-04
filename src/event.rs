@@ -1,15 +1,18 @@
 use std::time::Duration;
 
-use crossterm::event::Event as CrosstermEvent;
+use crossterm::event::{Event as CrosstermEvent, KeyEvent};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
 const TICK_FPS: f64 = 30.0;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
     Tick,
-    Crossterm(CrosstermEvent),
+    Keyboard(KeyEvent),
+
+    StartLoadingItem(usize),
+    LoadedItem(String),
 }
 
 #[derive(Debug)]
@@ -32,6 +35,10 @@ impl EventHandler {
             .await
             .ok_or(anyhow::anyhow!("Failed to read event"))
     }
+
+    pub fn get_sender(&self) -> mpsc::UnboundedSender<Event> {
+        self.sender.clone()
+    }
 }
 
 /// A thread that handles reading crossterm events and emitting tick events on a regular schedule.
@@ -46,9 +53,9 @@ impl EventTask {
     }
 
     async fn run(self) -> anyhow::Result<()> {
-        let tick_rate = Duration::from_secs_f64(TICK_FPS);
-        let mut reader = crossterm::event::EventStream::new();
+        let tick_rate = Duration::from_secs_f64(1.0 / TICK_FPS);
         let mut tick = tokio::time::interval(tick_rate);
+        let mut reader = crossterm::event::EventStream::new();
         loop {
             let tick_delay = tick.tick();
             let crossterm_event = reader.next().fuse();
@@ -60,7 +67,9 @@ impl EventTask {
                 self.send(Event::Tick);
               }
               Some(Ok(evt)) = crossterm_event => {
-                self.send(Event::Crossterm(evt));
+                if let CrosstermEvent::Key(key_evt) = evt {
+                    self.send(Event::Keyboard(key_evt));
+                }
               }
             };
         }
