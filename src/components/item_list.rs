@@ -1,3 +1,4 @@
+use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -11,7 +12,7 @@ use ratatui::{
 
 use crate::{
     data::Item,
-    event::{Event, EventState},
+    event::{Event, EventSender, EventState},
 };
 
 pub struct ItemList {
@@ -19,14 +20,17 @@ pub struct ItemList {
 
     data: Vec<Item>,
     list_state: ListState,
+
+    event_tx: EventSender,
 }
 
 impl ItemList {
-    pub fn new(data: Vec<Item>, focused: bool) -> Self {
+    pub fn new(data: Vec<Item>, focused: bool, event_tx: EventSender) -> Self {
         Self {
             focused,
             data,
             list_state: ListState::default(),
+            event_tx,
         }
     }
 
@@ -35,7 +39,36 @@ impl ItemList {
     }
 
     pub fn handle_event(&mut self, event: &Event) -> EventState {
-        EventState::NotConsumed
+        if !self.focused {
+            return EventState::NotConsumed;
+        }
+
+        match event {
+            Event::Keyboard(key_event) => self.handle_keyboard_event(key_event.code),
+            _ => EventState::NotConsumed,
+        }
+    }
+
+    fn handle_keyboard_event(&mut self, key: KeyCode) -> EventState {
+        match key {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.list_state.select_previous();
+                EventState::Consumed
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.list_state.select_next();
+                EventState::Consumed
+            }
+            KeyCode::Enter => {
+                // TODO: Start downloading stuff
+
+                self.event_tx.send(Event::StartLoadingItem);
+
+                // Do not consume this event, to allow for focus change in the parent
+                EventState::Consumed
+            }
+            _ => EventState::NotConsumed,
+        }
     }
 
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {

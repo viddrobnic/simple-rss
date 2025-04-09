@@ -11,7 +11,7 @@ pub enum Event {
     Tick,
     Keyboard(KeyEvent),
 
-    StartLoadingItem(usize),
+    StartLoadingItem,
     LoadedItem(String),
 }
 

@@ -27,7 +27,7 @@ pub struct App {
 
 impl App {
     pub fn new(event_tx: EventSender) -> Self {
-        let data_loader = DataLoader::new(event_tx);
+        let data_loader = DataLoader::new(event_tx.clone());
 
         let data = Data {
                 channels: vec![
@@ -50,7 +50,7 @@ impl App {
             };
 
         Self {
-            item_list: ItemList::new(data.items.clone(), true),
+            item_list: ItemList::new(data.items.clone(), true, event_tx),
             focus: Focus::ItemList,
             data,
             data_loader,
@@ -94,8 +94,15 @@ impl App {
                     EventState::NotConsumed
                 }
             }
+            Event::StartLoadingItem => match self.focus {
+                Focus::ItemList => {
+                    self.focus = Focus::Content;
+                    self.item_list.set_focused(false);
+                    EventState::Consumed
+                }
+                Focus::Content => EventState::NotConsumed,
+            },
             Event::Tick => EventState::NotConsumed,
-            Event::StartLoadingItem(_) => EventState::NotConsumed,
             Event::LoadedItem(_) => EventState::NotConsumed,
         }
     }
