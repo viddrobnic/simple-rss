@@ -1,6 +1,6 @@
 use tokio::sync::mpsc;
 
-use crate::event::{Event, EventHandler};
+use crate::event::Event;
 
 #[derive(Debug, Clone)]
 pub struct Item {

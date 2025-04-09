@@ -1,39 +1,48 @@
 use ratatui::{
+    Frame,
+    layout::Rect,
     style::{Color, Style, Stylize},
     text::{Line, Text},
     widgets::{
         Block, BorderType, List, ListItem, ListState, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, StatefulWidget, Widget,
+        ScrollbarState,
     },
 };
 
-use crate::data::Item;
+use crate::{
+    data::Item,
+    event::{Event, EventState},
+};
 
-pub struct ItemList<'a> {
-    selected: bool,
-    data: &'a [Item],
-    list_state: &'a mut ListState,
+pub struct ItemList {
+    focused: bool,
+
+    data: Vec<Item>,
+    list_state: ListState,
 }
 
-impl<'a> ItemList<'a> {
-    pub fn new(selected: bool, data: &'a [Item], list_state: &'a mut ListState) -> Self {
+impl ItemList {
+    pub fn new(data: Vec<Item>, focused: bool) -> Self {
         Self {
-            selected,
+            focused,
             data,
-            list_state,
+            list_state: ListState::default(),
         }
     }
-}
 
-impl Widget for ItemList<'_> {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
+    pub fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+
+    pub fn handle_event(&mut self, event: &Event) -> EventState {
+        EventState::NotConsumed
+    }
+
+    pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title(Line::from("Channels"));
-        if !self.selected {
+        if !self.focused {
             block = block.border_style(Color::Gray)
         }
 
@@ -48,13 +57,13 @@ impl Widget for ItemList<'_> {
         .block(block)
         .highlight_style(Style::default().bg(Color::Blue));
 
-        StatefulWidget::render(list, area, buf, self.list_state);
+        frame.render_stateful_widget(list, area, &mut self.list_state);
 
         // Scrollbar
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut bar_state =
             ScrollbarState::new(self.data.len()).position(self.list_state.selected().unwrap_or(0));
-        StatefulWidget::render(scroll_bar, area, buf, &mut bar_state);
+        frame.render_stateful_widget(scroll_bar, area, &mut bar_state);
     }
 }
 

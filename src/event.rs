@@ -15,10 +15,24 @@ pub enum Event {
     LoadedItem(String),
 }
 
+pub type EventSender = mpsc::UnboundedSender<Event>;
+
 #[derive(Debug)]
 pub struct EventHandler {
-    sender: mpsc::UnboundedSender<Event>,
+    sender: EventSender,
     receiver: mpsc::UnboundedReceiver<Event>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum EventState {
+    Consumed,
+    NotConsumed,
+}
+
+impl EventState {
+    pub fn is_consumed(&self) -> bool {
+        *self == Self::Consumed
+    }
 }
 
 impl EventHandler {

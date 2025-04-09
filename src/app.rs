@@ -1,30 +1,35 @@
+use crossterm::event::KeyCode;
 use ratatui::{
-    DefaultTerminal, Frame,
+    Frame,
     layout::{Constraint, Direction, Layout},
 };
 
 use crate::{
+    components::ItemList,
     data::{Channel, Data, DataLoader, Item},
-    event::{Event, EventHandler},
-    state::{AppState, EventBehavior},
-    widget::{Content, ItemList},
+    event::{Event, EventSender, EventState},
 };
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Focus {
+    ItemList,
+    Content,
+}
 
 pub struct App {
     data: Data,
     data_loader: DataLoader,
 
-    state: AppState,
-    events: EventHandler,
+    focus: Focus,
+
+    item_list: ItemList,
 }
 
 impl App {
-    pub fn new() -> Self {
-        let events = EventHandler::new();
-        let data_loader = DataLoader::new(events.get_sender());
+    pub fn new(event_tx: EventSender) -> Self {
+        let data_loader = DataLoader::new(event_tx);
 
-        Self {
-            data: Data {
+        let data = Data {
                 channels: vec![
                     Channel {
                         title: "Test".to_string(),
@@ -42,58 +47,56 @@ impl App {
                     };
                     50
                 ],
-            },
-            state: AppState::new(data_loader.clone()),
-            data_loader,
-            events,
-        }
-    }
-
-    pub async fn run(&mut self, mut terminal: DefaultTerminal) -> anyhow::Result<()> {
-        self.state.set_running();
-        while self.state.is_running() {
-            terminal.draw(|t| self.render(t))?;
-            let event = self.events.next().await?;
-            self.handle_event(event);
-        }
-
-        Ok(())
-    }
-
-    fn handle_event(&mut self, event: Event) {
-        let beh = self.state.handle_event(event);
-        let EventBehavior::Handle(event) = beh else {
-            return;
-        };
-
-        if let Event::StartLoadingItem(idx) = event {
-            let Some(link) = &self.data.items[idx].link else {
-                return;
             };
 
-            let dl = self.data_loader.clone();
-            let link = link.clone();
-            tokio::spawn(async move {
-                dl.load_item(&link).await;
-            });
+        Self {
+            item_list: ItemList::new(data.items.clone(), true),
+            focus: Focus::ItemList,
+            data,
+            data_loader,
         }
     }
 
-    fn render(&mut self, frame: &mut Frame) {
+    pub fn draw(&mut self, frame: &mut Frame) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Ratio(1, 3), Constraint::Ratio(2, 3)])
             .spacing(1)
             .split(frame.area());
 
-        let item_list = ItemList::new(
-            self.state.is_items_list_active(),
-            &self.data.items,
-            self.state.items_state_mut(),
-        );
-        frame.render_widget(item_list, layout[0]);
+        self.item_list.draw(frame, layout[0]);
 
-        let content = Content::new(self.state.is_content_active(), self.state.content_state());
-        frame.render_widget(content, layout[1]);
+        // TODO: render content
+    }
+
+    pub fn handle_event(&mut self, event: &Event) -> EventState {
+        // Component events
+        let state = self.item_list.handle_event(event);
+        if state.is_consumed() {
+            return EventState::Consumed;
+        }
+
+        // TODO: Handle content state
+
+        // Move focus
+        match event {
+            Event::Keyboard(key) => {
+                if key.code == KeyCode::Char('q') || key.code == KeyCode::Esc {
+                    match self.focus {
+                        Focus::ItemList => EventState::NotConsumed,
+                        Focus::Content => {
+                            self.focus = Focus::ItemList;
+                            self.item_list.set_focused(true);
+                            EventState::Consumed
+                        }
+                    }
+                } else {
+                    EventState::NotConsumed
+                }
+            }
+            Event::Tick => EventState::NotConsumed,
+            Event::StartLoadingItem(_) => EventState::NotConsumed,
+            Event::LoadedItem(_) => EventState::NotConsumed,
+        }
     }
 }
