@@ -5,7 +5,7 @@ use ratatui::{
 };
 
 use crate::{
-    components::ItemList,
+    components::{Content, ItemList},
     data::{Channel, Data, DataLoader, Item},
     event::{Event, EventSender, EventState},
 };
@@ -23,6 +23,7 @@ pub struct App {
     focus: Focus,
 
     item_list: ItemList,
+    content: Content,
 }
 
 impl App {
@@ -50,7 +51,8 @@ impl App {
             };
 
         Self {
-            item_list: ItemList::new(data.items.clone(), true, event_tx),
+            item_list: ItemList::new(data.items.clone(), true, event_tx, data_loader.clone()),
+            content: Content::new(false),
             focus: Focus::ItemList,
             data,
             data_loader,
@@ -65,8 +67,7 @@ impl App {
             .split(frame.area());
 
         self.item_list.draw(frame, layout[0]);
-
-        // TODO: render content
+        self.content.draw(frame, layout[1]);
     }
 
     pub fn handle_event(&mut self, event: &Event) -> EventState {
@@ -76,7 +77,10 @@ impl App {
             return EventState::Consumed;
         }
 
-        // TODO: Handle content state
+        let state = self.content.handle_event(event);
+        if state.is_consumed() {
+            return EventState::Consumed;
+        }
 
         // Move focus
         match event {
@@ -87,6 +91,7 @@ impl App {
                         Focus::Content => {
                             self.focus = Focus::ItemList;
                             self.item_list.set_focused(true);
+                            self.content.set_focused(false);
                             EventState::Consumed
                         }
                     }
@@ -98,6 +103,7 @@ impl App {
                 Focus::ItemList => {
                     self.focus = Focus::Content;
                     self.item_list.set_focused(false);
+                    self.item_list.set_focused(true);
                     EventState::Consumed
                 }
                 Focus::Content => EventState::NotConsumed,

@@ -1,59 +1,102 @@
+use crossterm::event::KeyCode;
 use html2text::from_read;
 use ratatui::{
+    Frame,
+    layout::Rect,
     style::Color,
-    widgets::{Block, BorderType, Paragraph, Widget, Wrap},
+    widgets::{Block, BorderType, Paragraph, Wrap},
 };
 
+use crate::event::{Event, EventState};
+
 #[derive(Default)]
-pub enum ContentState {
+enum ContentState {
     #[default]
     Empty,
     Loading(u8),
     Data(String),
 }
 
-pub struct Content<'a> {
-    selected: bool,
-    state: &'a ContentState,
+pub struct Content {
+    focused: bool,
+    state: ContentState,
 }
 
-impl<'a> Content<'a> {
-    pub fn new(selected: bool, state: &'a ContentState) -> Self {
-        Self { selected, state }
+impl Content {
+    pub fn new(focused: bool) -> Self {
+        Self {
+            focused,
+            state: ContentState::default(),
+        }
     }
 
-    fn render_empty(self, mut area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
-        let block = basic_block(self.selected);
-        block.render(area, buf);
+    pub fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+
+    pub fn handle_event(&mut self, event: &Event) -> EventState {
+        match event {
+            Event::Keyboard(key_event) => self.handle_keyboard_event(key_event.code),
+            Event::Tick => match self.state {
+                ContentState::Loading(tick) => {
+                    self.state = ContentState::Loading(tick.wrapping_add(1));
+                    EventState::NotConsumed
+                }
+                _ => EventState::NotConsumed,
+            },
+            Event::StartLoadingItem => {
+                self.state = ContentState::Loading(0);
+
+                // Do not consume this event, so that the parent can transition
+                // the focused state.
+                EventState::NotConsumed
+            }
+            Event::LoadedItem(text) => {
+                self.state = ContentState::Data(text.clone());
+                EventState::Consumed
+            }
+        }
+    }
+
+    fn handle_keyboard_event(&mut self, key: KeyCode) -> EventState {
+        if !self.focused {
+            return EventState::NotConsumed;
+        }
+
+        // TODO: Implement this
+        EventState::NotConsumed
+    }
+
+    pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
+        match self.state {
+            ContentState::Empty => self.draw_empty(frame, area),
+            ContentState::Loading(tick) => self.draw_loading(tick, frame, area),
+            ContentState::Data(ref text) => self.draw_data(frame, area, text),
+        }
+    }
+
+    fn draw_empty(&self, frame: &mut Frame, mut area: Rect) {
+        let block = basic_block(self.focused);
+        frame.render_widget(block, area);
 
         let paragraph = Paragraph::new("Select an item to get started").centered();
 
         area.y = area.height / 2;
-        paragraph.render(area, buf);
+        frame.render_widget(paragraph, area);
     }
 
-    fn render_loading(
-        self,
-        mut area: ratatui::prelude::Rect,
-        buf: &mut ratatui::prelude::Buffer,
-        tick: u8,
-    ) {
-        let block = basic_block(self.selected);
-        block.render(area, buf);
+    fn draw_loading(&self, tick: u8, frame: &mut Frame, mut area: Rect) {
+        let block = basic_block(self.focused);
+        frame.render_widget(block, area);
 
         let paragraph = Paragraph::new(format!("Loading {tick}")).centered();
 
         area.y = area.height / 2;
-        paragraph.render(area, buf);
+        frame.render_widget(paragraph, area);
     }
 
-    fn render_data(
-        self,
-        area: ratatui::prelude::Rect,
-        buf: &mut ratatui::prelude::Buffer,
-        text: &str,
-    ) {
-        let block = basic_block(self.selected);
+    fn draw_data(&self, frame: &mut Frame, area: Rect, text: &str) {
+        let block = basic_block(self.focused);
 
         let text =
             from_read(text.as_bytes(), area.width as usize).unwrap_or_else(|_| text.to_string());
@@ -63,7 +106,7 @@ impl<'a> Content<'a> {
             .wrap(Wrap { trim: true })
             .scroll((0, 0));
 
-        paragraph.render(area, buf);
+        frame.render_widget(paragraph, area);
     }
 }
 
@@ -74,17 +117,4 @@ fn basic_block(selected: bool) -> Block<'static> {
     }
 
     block
-}
-
-impl Widget for Content<'_> {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
-        match self.state {
-            ContentState::Empty => self.render_empty(area, buf),
-            ContentState::Loading(tick) => self.render_loading(area, buf, *tick),
-            ContentState::Data(text) => self.render_data(area, buf, text),
-        }
-    }
 }

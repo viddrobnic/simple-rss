@@ -11,7 +11,7 @@ use ratatui::{
 };
 
 use crate::{
-    data::Item,
+    data::{DataLoader, Item},
     event::{Event, EventSender, EventState},
 };
 
@@ -22,15 +22,22 @@ pub struct ItemList {
     list_state: ListState,
 
     event_tx: EventSender,
+    data_loader: DataLoader,
 }
 
 impl ItemList {
-    pub fn new(data: Vec<Item>, focused: bool, event_tx: EventSender) -> Self {
+    pub fn new(
+        data: Vec<Item>,
+        focused: bool,
+        event_tx: EventSender,
+        data_loader: DataLoader,
+    ) -> Self {
         Self {
             focused,
             data,
             list_state: ListState::default(),
             event_tx,
+            data_loader,
         }
     }
 
@@ -60,9 +67,17 @@ impl ItemList {
                 EventState::Consumed
             }
             KeyCode::Enter => {
-                // TODO: Start downloading stuff
+                let loader = self.data_loader.clone();
+                if let Some(selected) = self.list_state.selected() {
+                    if let Some(url) = &self.data[selected].link {
+                        let url = url.clone();
+                        tokio::spawn(async move {
+                            loader.load_item(&url).await;
+                        });
+                    }
+                }
 
-                self.event_tx.send(Event::StartLoadingItem);
+                let _ = self.event_tx.send(Event::StartLoadingItem);
 
                 // Do not consume this event, to allow for focus change in the parent
                 EventState::Consumed
@@ -74,7 +89,7 @@ impl ItemList {
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
-            .title(Line::from("Channels"));
+            .title(Line::from("Items"));
         if !self.focused {
             block = block.border_style(Color::Gray)
         }
