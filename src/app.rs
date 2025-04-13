@@ -103,7 +103,7 @@ impl App {
                 Focus::ItemList => {
                     self.focus = Focus::Content;
                     self.item_list.set_focused(false);
-                    self.item_list.set_focused(true);
+                    self.content.set_focused(true);
                     EventState::Consumed
                 }
                 Focus::Content => EventState::NotConsumed,

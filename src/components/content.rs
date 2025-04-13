@@ -4,7 +4,7 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::Color,
-    widgets::{Block, BorderType, Paragraph, Wrap},
+    widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
 use crate::event::{Event, EventState};
@@ -14,7 +14,20 @@ enum ContentState {
     #[default]
     Empty,
     Loading(u8),
-    Data(String),
+    Data(ContentStateData),
+}
+
+struct ContentStateData {
+    raw_text: String,
+    scroll_offset: usize,
+
+    render_cache: Option<RenderCache>,
+}
+
+struct RenderCache {
+    text: String,
+    nr_lines: usize,
+    render_width: u16,
 }
 
 pub struct Content {
@@ -52,7 +65,12 @@ impl Content {
                 EventState::NotConsumed
             }
             Event::LoadedItem(text) => {
-                self.state = ContentState::Data(text.clone());
+                self.state = ContentState::Data(ContentStateData {
+                    raw_text: text.clone(),
+                    scroll_offset: 0,
+                    render_cache: None,
+                });
+
                 EventState::Consumed
             }
         }
@@ -63,15 +81,17 @@ impl Content {
             return EventState::NotConsumed;
         }
 
-        // TODO: Implement this
-        EventState::NotConsumed
+        match &mut self.state {
+            ContentState::Data(data) => data.handle_keyboard_event(key),
+            _ => EventState::NotConsumed,
+        }
     }
 
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         match self.state {
             ContentState::Empty => self.draw_empty(frame, area),
             ContentState::Loading(tick) => self.draw_loading(tick, frame, area),
-            ContentState::Data(ref text) => self.draw_data(frame, area, text),
+            ContentState::Data(ref mut data) => data.draw(frame, area, self.focused),
         }
     }
 
@@ -94,20 +114,6 @@ impl Content {
         area.y = area.height / 2;
         frame.render_widget(paragraph, area);
     }
-
-    fn draw_data(&self, frame: &mut Frame, area: Rect, text: &str) {
-        let block = basic_block(self.focused);
-
-        let text =
-            from_read(text.as_bytes(), area.width as usize).unwrap_or_else(|_| text.to_string());
-
-        let paragraph = Paragraph::new(text)
-            .block(block)
-            .wrap(Wrap { trim: true })
-            .scroll((0, 0));
-
-        frame.render_widget(paragraph, area);
-    }
 }
 
 fn basic_block(selected: bool) -> Block<'static> {
@@ -117,4 +123,70 @@ fn basic_block(selected: bool) -> Block<'static> {
     }
 
     block
+}
+
+impl ContentStateData {
+    fn handle_keyboard_event(&mut self, key: KeyCode) -> EventState {
+        match key {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.scroll_offset = self.scroll_offset.saturating_sub(1);
+
+                EventState::Consumed
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let nr_lines = self.render_cache.as_ref().map(|c| c.nr_lines);
+                if let Some(nr_lines) = nr_lines {
+                    self.scroll_offset += 1;
+                    self.scroll_offset = self.scroll_offset.min(nr_lines - 1);
+                }
+
+                EventState::Consumed
+            }
+            _ => EventState::NotConsumed,
+        }
+    }
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
+        let scroll_offset = self.scroll_offset;
+        let cache = self.get_render_cache(area);
+
+        let block = basic_block(focused);
+
+        let paragraph = Paragraph::new(cache.text.clone())
+            .block(block)
+            .scroll((scroll_offset as u16, 0));
+
+        frame.render_widget(paragraph, area);
+
+        // Scrollbar
+        let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+        let mut bar_state = ScrollbarState::new(cache.nr_lines).position(scroll_offset);
+        frame.render_stateful_widget(scroll_bar, area, &mut bar_state);
+    }
+
+    fn get_render_cache(&mut self, area: Rect) -> &RenderCache {
+        let Some(render_cache) = &self.render_cache else {
+            return self.recalculate_render_cache(area);
+        };
+
+        if render_cache.render_width != area.width {
+            return self.recalculate_render_cache(area);
+        }
+
+        self.render_cache.as_ref().unwrap()
+    }
+
+    fn recalculate_render_cache(&mut self, area: Rect) -> &RenderCache {
+        let text = from_read(self.raw_text.as_bytes(), area.width as usize - 2)
+            .unwrap_or_else(|_| self.raw_text.to_string());
+        let nr_lines = text.lines().count();
+
+        self.render_cache = Some(RenderCache {
+            text,
+            nr_lines,
+            render_width: area.width,
+        });
+
+        self.render_cache.as_ref().unwrap()
+    }
 }
