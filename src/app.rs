@@ -6,7 +6,7 @@ use ratatui::{
 
 use crate::{
     components::{Content, ItemList},
-    data::{Channel, Data, DataLoader, Item},
+    data::DataLoader,
     event::{Event, EventSender, EventState},
 };
 
@@ -17,7 +17,6 @@ enum Focus {
 }
 
 pub struct App {
-    data: Data,
     data_loader: DataLoader,
 
     focus: Focus,
@@ -29,32 +28,12 @@ pub struct App {
 impl App {
     pub fn new(event_tx: EventSender) -> Self {
         let data_loader = DataLoader::new(event_tx.clone());
-
-        let data = Data {
-                channels: vec![
-                    Channel {
-                        title: "Test".to_string(),
-                        description: "Test description 123".to_string(),
-                    };
-                    10
-                ],
-                items: vec![
-                    Item {
-                        id: "".to_string(),
-                        title: "title".to_string(),
-                        description: Some("very very long string asdf asdf asdf asdf asdf asdf asdf asdf asd fasdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asdf asf asdf ".to_string()),
-                        link: Some("https://viddrobnic.com/blog/2025/writing-my-language-3/".to_string()),
-                        read: false,
-                    };
-                    50
-                ],
-            };
+        let items = data_loader.get_items();
 
         Self {
-            item_list: ItemList::new(data.items.clone(), true, event_tx, data_loader.clone()),
+            item_list: ItemList::new(items, true, event_tx, data_loader.clone()),
             content: Content::new(false),
             focus: Focus::ItemList,
-            data,
             data_loader,
         }
     }

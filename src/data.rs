@@ -1,6 +1,6 @@
-use tokio::sync::mpsc;
+use std::sync::{Arc, Mutex};
 
-use crate::event::Event;
+use crate::event::{Event, EventSender};
 
 #[derive(Debug, Clone)]
 pub struct Item {
@@ -18,21 +18,35 @@ pub struct Channel {
     pub description: String,
 }
 
-#[derive(Debug, Clone)]
-pub struct Data {
-    pub channels: Vec<Channel>,
-    pub items: Vec<Item>,
-}
-
 #[derive(Clone)]
 pub struct DataLoader {
-    sender: mpsc::UnboundedSender<Event>,
+    sender: EventSender,
+
+    data: Arc<Mutex<Data>>,
+}
+
+#[derive(Default)]
+struct Data {
+    channels: Vec<Channel>,
+    items: Vec<Item>,
 }
 
 impl DataLoader {
-    pub fn new(sender: mpsc::UnboundedSender<Event>) -> Self {
-        Self { sender }
+    pub fn new(sender: EventSender) -> Self {
+        let data = Data::load();
+
+        Self {
+            sender,
+            data: Arc::new(Mutex::new(data)),
+        }
     }
+
+    pub fn get_items(&self) -> Vec<Item> {
+        let lock = self.data.lock().unwrap();
+        lock.items.clone()
+    }
+
+    pub fn save(&self) {}
 
     pub async fn load_item(&self, url: &str) {
         let resp = reqwest::get(url).await;
@@ -47,5 +61,19 @@ impl DataLoader {
         };
 
         let _ = self.sender.send(Event::LoadedItem(text));
+    }
+
+    pub async fn refresh(&mut self) {
+        // TODO: Get data
+
+        let mut lock = self.data.lock().unwrap();
+        lock.items = vec![];
+        lock.channels = vec![]
+    }
+}
+
+impl Data {
+    fn load() -> Self {
+        Self::default()
     }
 }
