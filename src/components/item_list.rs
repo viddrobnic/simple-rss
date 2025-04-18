@@ -18,7 +18,6 @@ use crate::{
 pub struct ItemList {
     focused: bool,
 
-    data: Vec<Item>,
     list_state: ListState,
 
     event_tx: EventSender,
@@ -26,15 +25,9 @@ pub struct ItemList {
 }
 
 impl ItemList {
-    pub fn new(
-        data: Vec<Item>,
-        focused: bool,
-        event_tx: EventSender,
-        data_loader: DataLoader,
-    ) -> Self {
+    pub fn new(focused: bool, event_tx: EventSender, data_loader: DataLoader) -> Self {
         Self {
             focused,
-            data,
             list_state: ListState::default(),
             event_tx,
             data_loader,
@@ -69,17 +62,17 @@ impl ItemList {
             KeyCode::Enter => {
                 let loader = self.data_loader.clone();
                 if let Some(selected) = self.list_state.selected() {
-                    if let Some(url) = &self.data[selected].link {
+                    let data = self.data_loader.get_data();
+                    if let Some(url) = &data.items[selected].link {
                         let url = url.clone();
                         tokio::spawn(async move {
                             loader.load_item(&url).await;
                         });
+
+                        self.event_tx.send(Event::StartLoadingItem);
                     }
                 }
 
-                let _ = self.event_tx.send(Event::StartLoadingItem);
-
-                // Do not consume this event, to allow for focus change in the parent
                 EventState::Consumed
             }
             _ => EventState::NotConsumed,
@@ -95,7 +88,8 @@ impl ItemList {
         }
 
         // List
-        let list = List::new(self.data.iter().enumerate().map(|(idx, it)| {
+        let data = self.data_loader.get_data();
+        let list = List::new(data.items.iter().enumerate().map(|(idx, it)| {
             item_to_list_item(
                 it,
                 self.list_state.selected() == Some(idx),
@@ -110,7 +104,7 @@ impl ItemList {
         // Scrollbar
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut bar_state =
-            ScrollbarState::new(self.data.len()).position(self.list_state.selected().unwrap_or(0));
+            ScrollbarState::new(data.items.len()).position(self.list_state.selected().unwrap_or(0));
         frame.render_stateful_widget(scroll_bar, area, &mut bar_state);
     }
 }

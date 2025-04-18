@@ -15,7 +15,8 @@ pub enum Event {
     LoadedItem(String),
 }
 
-pub type EventSender = mpsc::UnboundedSender<Event>;
+#[derive(Debug, Clone)]
+pub struct EventSender(mpsc::UnboundedSender<Event>);
 
 #[derive(Debug)]
 pub struct EventHandler {
@@ -29,6 +30,16 @@ pub enum EventState {
     NotConsumed,
 }
 
+impl EventSender {
+    pub fn send(&self, event: Event) {
+        let _ = self.0.send(event);
+    }
+
+    pub async fn closed(&self) {
+        self.0.closed().await
+    }
+}
+
 impl EventState {
     pub fn is_consumed(&self) -> bool {
         *self == Self::Consumed
@@ -38,6 +49,7 @@ impl EventState {
 impl EventHandler {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
+        let sender = EventSender(sender);
         let actor = EventTask::new(sender.clone());
         tokio::spawn(async { actor.run().await });
         Self { sender, receiver }
@@ -50,19 +62,18 @@ impl EventHandler {
             .ok_or(anyhow::anyhow!("Failed to read event"))
     }
 
-    pub fn get_sender(&self) -> mpsc::UnboundedSender<Event> {
+    pub fn get_sender(&self) -> EventSender {
         self.sender.clone()
     }
 }
 
 /// A thread that handles reading crossterm events and emitting tick events on a regular schedule.
 struct EventTask {
-    /// Event sender channel.
-    sender: mpsc::UnboundedSender<Event>,
+    sender: EventSender,
 }
 
 impl EventTask {
-    fn new(sender: mpsc::UnboundedSender<Event>) -> Self {
+    fn new(sender: EventSender) -> Self {
         Self { sender }
     }
 
@@ -78,22 +89,15 @@ impl EventTask {
                 break;
               }
               _ = tick_delay => {
-                self.send(Event::Tick);
+                self.sender.send(Event::Tick);
               }
               Some(Ok(evt)) = crossterm_event => {
                 if let CrosstermEvent::Key(key_evt) = evt {
-                    self.send(Event::Keyboard(key_evt));
+                    self.sender.send(Event::Keyboard(key_evt));
                 }
               }
             };
         }
         Ok(())
-    }
-
-    /// Sends an event to the receiver.
-    fn send(&self, event: Event) {
-        // Ignores the result because shutting down the app drops the receiver, which causes the send
-        // operation to fail. This is expected behavior and should not panic.
-        let _ = self.sender.send(event);
     }
 }

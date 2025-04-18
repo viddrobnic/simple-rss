@@ -6,6 +6,7 @@ mod app;
 mod components;
 mod data;
 mod event;
+mod path;
 mod state;
 
 #[tokio::main]
@@ -13,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     let mut terminal = ratatui::init();
 
     let mut events = EventHandler::new();
-    let mut app = App::new(events.get_sender());
+    let mut app = App::new(events.get_sender())?;
 
     loop {
         terminal.draw(|f| app.draw(f))?;

@@ -26,16 +26,15 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(event_tx: EventSender) -> Self {
-        let data_loader = DataLoader::new(event_tx.clone());
-        let items = data_loader.get_items();
+    pub fn new(event_tx: EventSender) -> anyhow::Result<Self> {
+        let data_loader = DataLoader::new(event_tx.clone())?;
 
-        Self {
-            item_list: ItemList::new(items, true, event_tx, data_loader.clone()),
+        Ok(Self {
+            item_list: ItemList::new(true, event_tx, data_loader.clone()),
             content: Content::new(false),
             focus: Focus::ItemList,
             data_loader,
-        }
+        })
     }
 
     pub fn draw(&mut self, frame: &mut Frame) {
