@@ -62,15 +62,13 @@ impl ItemList {
             KeyCode::Enter => {
                 if let Some(selected) = self.list_state.selected() {
                     let data = self.data_loader.get_data();
-                    if let Some(url) = &data.items[selected].link {
-                        let url = url.clone();
-                        let loader = self.data_loader.clone();
-                        tokio::spawn(async move {
-                            loader.load_item(&url).await;
-                        });
+                    let url = data.items[selected].link.clone();
+                    let loader = self.data_loader.clone();
+                    tokio::spawn(async move {
+                        loader.load_item(&url).await;
+                    });
 
-                        self.event_tx.send(Event::StartLoadingItem);
-                    }
+                    self.event_tx.send(Event::StartLoadingItem);
                 }
 
                 EventState::Consumed

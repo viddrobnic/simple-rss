@@ -4,6 +4,7 @@ use std::{
     path::Path,
 };
 
+use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
 use crate::path::{config_path, data_dir};
@@ -17,7 +18,8 @@ pub struct Item {
     pub id: String,
     pub title: String,
     pub description: Option<String>,
-    pub link: Option<String>,
+    pub pub_date: Option<DateTime<FixedOffset>>,
+    pub link: String,
 
     pub read: bool,
 }

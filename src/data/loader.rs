@@ -1,5 +1,6 @@
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 
+use chrono::DateTime;
 use futures::future::join_all;
 
 use crate::event::{Event, EventSender};
@@ -68,18 +69,32 @@ impl DataLoader {
         } else {
             let mut lock = self.data.write().unwrap();
             // TODO: Sort items
+            items.sort_by(|a, b| b.pub_date.cmp(&a.pub_date));
             lock.items = items;
         }
     }
 }
 
 async fn get_channel(url: &str) -> anyhow::Result<Vec<Item>> {
-    // TODO: Get items
-    Ok(vec![Item {
-        id: "test".to_string(),
-        title: "title".to_string(),
-        description: Some("description".to_string()),
-        link: Some("https://viddrobnic.com".to_string()),
-        read: false,
-    }])
+    let content = reqwest::get(url).await?.bytes().await?;
+    let channel = rss::Channel::read_from(&content[..])?;
+
+    let items: Vec<_> = channel
+        .items
+        .into_iter()
+        .filter_map(|it| {
+            Some(Item {
+                id: format!("{}:{}", url, it.guid.map(|g| g.value)?),
+                title: it.title?,
+                description: it.description,
+                pub_date: it
+                    .pub_date
+                    .and_then(|d| DateTime::parse_from_rfc2822(&d).ok()),
+                link: it.link?,
+                read: false,
+            })
+        })
+        .collect();
+
+    Ok(items)
 }
