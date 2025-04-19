@@ -29,6 +29,10 @@ impl App {
     pub fn new(event_tx: EventSender) -> anyhow::Result<Self> {
         let data_loader = DataLoader::new(event_tx.clone())?;
 
+        // Start refreshing
+        let mut loader = data_loader.clone();
+        tokio::spawn(async move { loader.refresh().await });
+
         Ok(Self {
             item_list: ItemList::new(true, event_tx, data_loader.clone()),
             content: Content::new(false),
