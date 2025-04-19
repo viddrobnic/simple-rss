@@ -1,5 +1,6 @@
 use app::App;
 use crossterm::event::KeyCode;
+use data::DataLoader;
 use event::{Event, EventHandler};
 
 mod app;
@@ -14,7 +15,8 @@ async fn main() -> anyhow::Result<()> {
     let mut terminal = ratatui::init();
 
     let mut events = EventHandler::new();
-    let mut app = App::new(events.get_sender())?;
+    let data_loader = DataLoader::new(events.get_sender())?;
+    let mut app = App::new(events.get_sender(), data_loader.clone())?;
 
     loop {
         terminal.draw(|f| app.draw(f))?;
@@ -30,6 +32,7 @@ async fn main() -> anyhow::Result<()> {
         };
 
         if key.code == KeyCode::Char('q') || key.code == KeyCode::Esc {
+            data_loader.save();
             break;
         }
     }

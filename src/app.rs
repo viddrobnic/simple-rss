@@ -26,15 +26,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(event_tx: EventSender) -> anyhow::Result<Self> {
-        let data_loader = DataLoader::new(event_tx.clone())?;
-
+    pub fn new(event_sender: EventSender, data_loader: DataLoader) -> anyhow::Result<Self> {
         // Start refreshing
         let mut loader = data_loader.clone();
         tokio::spawn(async move { loader.refresh().await });
 
         Ok(Self {
-            item_list: ItemList::new(true, event_tx, data_loader.clone()),
+            item_list: ItemList::new(true, event_sender, data_loader.clone()),
             content: Content::new(false),
             focus: Focus::ItemList,
             data_loader,

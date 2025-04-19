@@ -39,10 +39,6 @@ impl ItemList {
     }
 
     pub fn handle_event(&mut self, event: &Event) -> EventState {
-        if !self.focused {
-            return EventState::NotConsumed;
-        }
-
         match event {
             Event::Keyboard(key_event) => self.handle_keyboard_event(key_event.code),
             _ => EventState::NotConsumed,
@@ -50,6 +46,21 @@ impl ItemList {
     }
 
     fn handle_keyboard_event(&mut self, key: KeyCode) -> EventState {
+        //  Handle open browser separately, because it's independent of focus.
+        if key == KeyCode::Char('o') {
+            if let Some(selected) = self.list_state.selected() {
+                let data = self.data_loader.get_data();
+                let url = &data.items[selected].link;
+                let _ = webbrowser::open(url);
+            }
+
+            return EventState::Consumed;
+        }
+
+        if !self.focused {
+            return EventState::NotConsumed;
+        }
+
         match key {
             KeyCode::Up | KeyCode::Char('k') => {
                 self.list_state.select_previous();
