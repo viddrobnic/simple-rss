@@ -16,6 +16,7 @@ pub use loader::DataLoader;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Item {
     pub id: String,
+    pub channel_name: String,
     pub title: String,
     pub description: Option<String>,
     pub pub_date: Option<DateTime<FixedOffset>>,

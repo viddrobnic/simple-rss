@@ -85,6 +85,7 @@ async fn get_channel(url: &str) -> anyhow::Result<Vec<Item>> {
         .filter_map(|it| {
             Some(Item {
                 id: format!("{}:{}", url, it.guid.map(|g| g.value)?),
+                channel_name: channel.title.clone(),
                 title: it.title?,
                 description: it.description,
                 pub_date: it

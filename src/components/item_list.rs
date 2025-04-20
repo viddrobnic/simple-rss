@@ -1,4 +1,5 @@
 use crossterm::event::KeyCode;
+use html2text::config;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -119,7 +120,8 @@ impl ItemList {
 }
 
 fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
-    let opts = textwrap::Options::new(width)
+    // Title
+    let opts = textwrap::Options::new(width - 2)
         .initial_indent("[ ] ")
         .subsequent_indent("    ")
         .break_words(true);
@@ -143,12 +145,32 @@ fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
         return ListItem::from(text);
     };
 
-    let opts = textwrap::Options::new(width)
+    // Channel name
+    let opts = textwrap::Options::new(width - 2)
         .initial_indent("    ")
         .subsequent_indent("    ")
         .break_words(true);
-    let desc = textwrap::wrap(desc, &opts);
-    text.extend(desc);
+    let channel = textwrap::wrap(&it.channel_name, &opts);
+    text.extend(
+        channel
+            .iter()
+            .map(|s| Line::from(s.clone()).bold().fg(Color::Gray)),
+    );
+
+    // Description
+    text.push_line("");
+
+    // TODO: Optimize this, at least not run on every render
+    let desc = config::plain_no_decorate()
+        // width - 4 (space prefix) - 2 (buffer) = width - 6
+        .string_from_read(desc.as_bytes(), width - 6)
+        .unwrap_or_else(|_| desc.clone())
+        .lines()
+        .map(|line| format!("    {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    text.extend(Text::from(desc));
 
     text.push_line("");
     ListItem::from(text)
