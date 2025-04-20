@@ -51,8 +51,13 @@ impl ItemList {
         if key == KeyCode::Char('o') {
             if let Some(selected) = self.list_state.selected() {
                 let data = self.data_loader.get_data();
+
                 let url = &data.items[selected].link;
                 let _ = webbrowser::open(url);
+
+                // Set to read
+                drop(data); // Drop lock to avoid race condition
+                self.data_loader.set_read(selected, true);
             }
 
             return EventState::Consumed;
@@ -74,13 +79,29 @@ impl ItemList {
             KeyCode::Enter => {
                 if let Some(selected) = self.list_state.selected() {
                     let data = self.data_loader.get_data();
+
+                    // Start loading item
                     let url = data.items[selected].link.clone();
                     let loader = self.data_loader.clone();
                     tokio::spawn(async move {
                         loader.load_item(&url).await;
                     });
-
                     self.event_tx.send(Event::StartLoadingItem);
+
+                    // Set to read
+                    drop(data); // Drop lock to avoid race condition
+                    self.data_loader.set_read(selected, true);
+                }
+
+                EventState::Consumed
+            }
+            KeyCode::Char(' ') => {
+                if let Some(selected) = self.list_state.selected() {
+                    let data = self.data_loader.get_data();
+                    let new_read = !data.items[selected].read;
+
+                    drop(data); // Drop to avoid race condition
+                    self.data_loader.set_read(selected, new_read);
                 }
 
                 EventState::Consumed
@@ -121,10 +142,14 @@ impl ItemList {
 
 fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
     // Title
-    let opts = textwrap::Options::new(width - 2)
-        .initial_indent("[ ] ")
+    let mut opts = textwrap::Options::new(width - 2)
         .subsequent_indent("    ")
         .break_words(true);
+    if it.read {
+        opts = opts.initial_indent("[X] ")
+    } else {
+        opts = opts.initial_indent("[ ] ")
+    }
 
     let mut text = Text::default();
 

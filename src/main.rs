@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
         };
 
         if key.code == KeyCode::Char('q') || key.code == KeyCode::Esc {
-            data_loader.save();
+            data_loader.save()?;
             break;
         }
     }

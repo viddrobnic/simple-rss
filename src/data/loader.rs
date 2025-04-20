@@ -1,4 +1,7 @@
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::{
+    collections::HashSet,
+    sync::{Arc, RwLock, RwLockReadGuard},
+};
 
 use chrono::DateTime;
 use futures::future::join_all;
@@ -28,7 +31,16 @@ impl DataLoader {
         self.data.read().unwrap()
     }
 
-    pub fn save(&self) {}
+    pub fn save(&self) -> anyhow::Result<()> {
+        let lock = self.data.read().unwrap();
+        lock.save()
+    }
+
+    /// Set item at given index to read.
+    pub fn set_read(&mut self, index: usize, read: bool) {
+        let mut lock = self.data.write().unwrap();
+        lock.items[index].read = read;
+    }
 
     pub async fn load_item(&self, url: &str) {
         let resp = reqwest::get(url).await;
@@ -67,9 +79,20 @@ impl DataLoader {
         if !errors.is_empty() {
             // TODO: Report errors to data sender
         } else {
-            let mut lock = self.data.write().unwrap();
-            // TODO: Sort items
             items.sort_by(|a, b| b.pub_date.cmp(&a.pub_date));
+
+            let mut lock = self.data.write().unwrap();
+            let mut read_items = HashSet::new();
+            for it in &lock.items {
+                if it.read {
+                    read_items.insert(it.id.clone());
+                }
+            }
+
+            for it in items.iter_mut() {
+                it.read = read_items.contains(&it.id);
+            }
+
             lock.items = items;
         }
     }

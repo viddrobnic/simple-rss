@@ -38,6 +38,16 @@ impl Data {
 
         Ok(Self { items, channels })
     }
+
+    fn save(&self) -> anyhow::Result<()> {
+        let path = data_dir().join("data.json");
+        create_root(&path)?;
+
+        let file = fs::File::create(&path)?;
+        let writer = io::BufWriter::new(file);
+        serde_json::to_writer(writer, &self.items)?;
+        Ok(())
+    }
 }
 
 /// Creates all the directories that are needed to have a file at path.
@@ -53,7 +63,7 @@ fn create_root(path: impl AsRef<Path>) -> io::Result<()> {
     Ok(())
 }
 
-fn open_file(path: impl AsRef<Path>) -> io::Result<fs::File> {
+fn open_file_read(path: impl AsRef<Path>) -> io::Result<fs::File> {
     fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -66,7 +76,7 @@ fn load_items() -> io::Result<Vec<Item>> {
     let path = data_dir().join("data.json");
     create_root(&path)?;
 
-    let file = open_file(&path)?;
+    let file = open_file_read(&path)?;
     let reader = io::BufReader::new(file);
     let items = serde_json::from_reader(reader).unwrap_or_default();
 
@@ -77,7 +87,7 @@ fn load_channels() -> io::Result<Vec<String>> {
     let path = config_path();
     create_root(&path)?;
 
-    let file = open_file(&path)?;
+    let file = open_file_read(&path)?;
     let reader = io::BufReader::new(file);
     let channels: Result<Vec<_>, _> = reader.lines().collect();
     let channels = channels?
