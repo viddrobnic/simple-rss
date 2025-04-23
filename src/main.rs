@@ -7,6 +7,7 @@ mod app;
 mod components;
 mod data;
 mod event;
+mod html_render;
 mod path;
 mod state;
 
