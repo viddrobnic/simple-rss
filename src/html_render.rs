@@ -181,6 +181,12 @@ fn render_node(node: NodeRef<'_, Node>, res: &mut String, ctx: Context) -> Rende
 
                 status
             }
+            "h1" => render_header(&ctx, 1, node, res),
+            "h2" => render_header(&ctx, 2, node, res),
+            "h3" => render_header(&ctx, 3, node, res),
+            "h4" => render_header(&ctx, 4, node, res),
+            "h5" => render_header(&ctx, 5, node, res),
+            "h6" => render_header(&ctx, 6, node, res),
             "code" => {
                 let is_block = node.parent().is_some_and(|p| match p.value() {
                     Node::Element(elt) => elt.name() == "pre",
@@ -209,12 +215,12 @@ fn render_node(node: NodeRef<'_, Node>, res: &mut String, ctx: Context) -> Rende
                         ctx.context_type,
                         ContextType::Inline | ContextType::RequiresSpace
                     ) {
-                        new_line(&ctx, res);
+                        render_new_line(&ctx, res);
                     }
 
                     res.push_str("```");
                     for ch in node.children() {
-                        new_line(&ctx, res);
+                        render_new_line(&ctx, res);
 
                         render_node(
                             ch,
@@ -227,14 +233,14 @@ fn render_node(node: NodeRef<'_, Node>, res: &mut String, ctx: Context) -> Rende
                         );
                     }
 
-                    new_line(&ctx, res);
+                    render_new_line(&ctx, res);
                     res.push_str("```");
 
                     if matches!(
                         ctx.context_type,
                         ContextType::Inline | ContextType::RequiresSpace
                     ) {
-                        new_line(&ctx, res);
+                        render_new_line(&ctx, res);
                     }
 
                     RenderStatus::Rendered
@@ -289,7 +295,34 @@ fn render_children(children: Children<'_, Node>, res: &mut String, ctx: Context)
     status
 }
 
-fn new_line(ctx: &Context, res: &mut String) {
+fn render_header(
+    ctx: &Context,
+    heading: u8,
+    node: NodeRef<'_, Node>,
+    res: &mut String,
+) -> RenderStatus {
+    render_context(&ctx.merge(ContextType::NewParagraph), '#', res);
+
+    for _ in 0..heading {
+        res.push('#')
+    }
+
+    for ch in node.children() {
+        render_node(
+            ch,
+            res,
+            Context {
+                context_type: ContextType::RequiresSpace,
+                indent: ctx.indent,
+                keep_prefix_space: ctx.keep_prefix_space,
+            },
+        );
+    }
+
+    RenderStatus::Rendered
+}
+
+fn render_new_line(ctx: &Context, res: &mut String) {
     res.push('\n');
     for _ in 0..ctx.indent {
         res.push(' ');
@@ -305,15 +338,15 @@ fn render_context(ctx: &Context, first_char: char, res: &mut String) {
             }
         }
         ContextType::NewParagraph => {
-            new_line(ctx, res);
-            new_line(ctx, res);
+            render_new_line(ctx, res);
+            render_new_line(ctx, res);
         }
         ContextType::UnorderedList => {
-            new_line(ctx, res);
+            render_new_line(ctx, res);
             res.push_str("- ");
         }
         ContextType::OrderedList(idx) => {
-            new_line(ctx, res);
+            render_new_line(ctx, res);
             res.push_str(&format!("{}. ", idx));
         }
     }
