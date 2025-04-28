@@ -4,10 +4,14 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::Color,
+    text::Line,
     widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
-use crate::event::{Event, EventState};
+use crate::{
+    event::{Event, EventState},
+    html_render::render,
+};
 
 #[derive(Default)]
 enum ContentState {
@@ -25,8 +29,7 @@ struct ContentStateData {
 }
 
 struct RenderCache {
-    text: String,
-    nr_lines: usize,
+    lines: Vec<Line<'static>>,
     render_width: u16,
 }
 
@@ -134,7 +137,7 @@ impl ContentStateData {
                 EventState::Consumed
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                let nr_lines = self.render_cache.as_ref().map(|c| c.nr_lines);
+                let nr_lines = self.render_cache.as_ref().map(|c| c.lines.len());
                 if let Some(nr_lines) = nr_lines {
                     self.scroll_offset += 1;
                     self.scroll_offset = self.scroll_offset.min(nr_lines - 1);
@@ -152,7 +155,7 @@ impl ContentStateData {
 
         let block = basic_block(focused);
 
-        let paragraph = Paragraph::new(cache.text.clone())
+        let paragraph = Paragraph::new(cache.lines.clone())
             .block(block)
             .scroll((scroll_offset as u16, 0));
 
@@ -160,7 +163,7 @@ impl ContentStateData {
 
         // Scrollbar
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-        let mut bar_state = ScrollbarState::new(cache.nr_lines).position(scroll_offset);
+        let mut bar_state = ScrollbarState::new(cache.lines.len()).position(scroll_offset);
         frame.render_stateful_widget(scroll_bar, area, &mut bar_state);
     }
 
@@ -177,13 +180,10 @@ impl ContentStateData {
     }
 
     fn recalculate_render_cache(&mut self, area: Rect) -> &RenderCache {
-        let text = from_read(self.raw_text.as_bytes(), area.width as usize - 2)
-            .unwrap_or_else(|_| self.raw_text.to_string());
-        let nr_lines = text.lines().count();
+        let lines = render(&self.raw_text, area.width as usize - 2);
 
         self.render_cache = Some(RenderCache {
-            text,
-            nr_lines,
+            lines,
             render_width: area.width,
         });
 

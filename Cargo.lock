@@ -1805,6 +1805,7 @@ dependencies = [
  "serde_json",
  "textwrap",
  "tokio",
+ "unicode-width 0.2.0",
  "webbrowser",
 ]
 
