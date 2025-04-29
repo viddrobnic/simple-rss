@@ -1,11 +1,11 @@
 use ego_tree::{NodeRef, iter::Children};
-use ratatui::text::{Line, Span};
+use ratatui::text::Line;
 use scraper::{Html, Node};
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StackableModifier {
-    KeepPrefixSpace = 0b1,
+    KeepPrefixSpace = 1 << 0,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -81,10 +81,18 @@ impl Context {
         self.stackable_modifiers & modifier as u8 > 0
     }
 
-    fn set_stackable_modifier(&self, modifier: StackableModifier) -> Self {
+    fn add_stackable_modifier(&self, modifier: StackableModifier) -> Self {
         Context {
             exclusive_modifier: self.exclusive_modifier,
             stackable_modifiers: self.stackable_modifiers | modifier as u8,
+            indent: self.indent,
+        }
+    }
+
+    fn remove_stackable_modifier(&self, modifier: StackableModifier) -> Self {
+        Context {
+            exclusive_modifier: self.exclusive_modifier,
+            stackable_modifiers: self.stackable_modifiers & !(modifier as u8),
             indent: self.indent,
         }
     }
@@ -132,39 +140,32 @@ impl Renderer {
             Node::Text(text) => self.render_text(ctx, &text.text),
             Node::Element(element) => match element.name() {
                 "script" | "head" | "noscript" => RenderStatus::NotRendered, // ignore
-                //     "a" => {
-                //         render_context(&ctx.merge(ContextType::RequiresSpace), '[', res);
-                //
-                //         res.push('[');
-                //         render_children(
-                //             node.children(),
-                //             res,
-                //             Context {
-                //                 context_type: ContextType::Inline,
-                //                 indent: ctx.indent,
-                //                 keep_prefix_space: ctx.keep_prefix_space,
-                //             },
-                //         );
-                //         res.push_str("](");
-                //         res.push_str(element.attr("href").unwrap_or(""));
-                //         res.push(')');
-                //
-                //         RenderStatus::RenderedRequiresSpace
-                //     }
-                //     "span" => {
-                //         render_context(&ctx, ' ', res);
-                //         render_children(
-                //             node.children(),
-                //             res,
-                //             Context {
-                //                 context_type: ContextType::Inline,
-                //                 indent: ctx.indent,
-                //                 keep_prefix_space: ctx.keep_prefix_space,
-                //             },
-                //         );
-                //
-                //         RenderStatus::RenderedRequiresSpace
-                //     }
+                "span" => {
+                    // TODO: Set first char correctly
+                    self.render_context(ctx, None);
+                    self.render_children(
+                        ctx.set_exclusive_modifier(ExclusiveModifier::Inline),
+                        node.children(),
+                    );
+
+                    RenderStatus::RenderedRequiresSpace
+                }
+                "a" => {
+                    self.render_context(
+                        ctx.merge_exclusive_modifier(ExclusiveModifier::RequiresSpace),
+                        Some('['),
+                    );
+
+                    let ctx = ctx.set_exclusive_modifier(ExclusiveModifier::Inline);
+                    self.render_text(ctx, "[");
+                    self.render_children(ctx, node.children());
+                    self.render_text(ctx, "]");
+                    self.render_text(ctx, "(");
+                    self.render_text(ctx, element.attr("href").unwrap_or(""));
+                    self.render_text(ctx, ")");
+
+                    RenderStatus::RenderedRequiresSpace
+                }
                 //     "strong" => {
                 //         render_context(&ctx, ' ', res);
                 //
@@ -331,22 +332,22 @@ impl Renderer {
             return RenderStatus::NotRendered;
         }
 
-        // TODO: Correctly set first char
-        self.render_context(ctx, None);
+        let first_char = prefix.chars().next().or(txt.chars().next());
+        self.render_context(ctx, first_char);
 
         if !prefix.is_empty() {
             self.lines.last_mut().unwrap().push_span(prefix.to_string());
             self.last_line_width += prefix.width();
         }
 
-        for word in txt.split_whitespace() {
+        for (idx, word) in txt.split_whitespace().enumerate() {
             // Add + 1 for space
             if self.max_width < self.last_line_width + word.width() + 1 {
                 self.render_new_line(ctx.indent);
             }
 
             let line = self.lines.last_mut().unwrap();
-            if self.last_line_width != 0 {
+            if idx > 0 && self.last_line_width != 0 {
                 line.push_span(" ");
                 self.last_line_width += 1;
             }
@@ -359,6 +360,8 @@ impl Renderer {
     }
 
     fn render_context(&mut self, ctx: Context, first_char: Option<char>) {
+        // TODO: Handle new lines at the beginning of the file
+
         match ctx.exclusive_modifier {
             ExclusiveModifier::Inline => (),
             ExclusiveModifier::RequiresSpace => {
@@ -431,9 +434,9 @@ mod test {
     use super::render;
 
     #[test]
-    fn simple_paragraph() {
-        let lines = render("<p>simple paragraph</p>", 120);
-        assert_eq!(lines.len(), 1);
+    fn simple() {
+        let lines = render(r#"<p><a href="test">neki</a>. se neki</p>"#, 120);
         println!("{:?}", lines);
+        assert_eq!(lines.len(), 1);
     }
 }
