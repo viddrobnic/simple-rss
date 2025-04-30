@@ -3,9 +3,12 @@ use ratatui::text::Line;
 use scraper::{Html, Node};
 use unicode_width::UnicodeWidthStr;
 
+const TAB_SIZE: u16 = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StackableModifier {
     KeepPrefixSpace = 1 << 0,
+    InsideList = 1 << 1,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -193,11 +196,12 @@ impl Renderer {
                 }
                 "ul" => {
                     let mut status = RenderStatus::NotRendered;
+                    let ctx = ctx
+                        .merge_exclusive_modifier(ExclusiveModifier::UnorderedList)
+                        .add_stackable_modifier(StackableModifier::InsideList);
+
                     for child in node.children() {
-                        let st = self.render_node(
-                            ctx.merge_exclusive_modifier(ExclusiveModifier::UnorderedList),
-                            child,
-                        );
+                        let st = self.render_node(ctx, child);
                         if st.is_rendered() {
                             status = RenderStatus::Rendered;
                         }
@@ -210,7 +214,8 @@ impl Renderer {
                     let mut count = 1;
                     for child in node.children() {
                         let st = self.render_node(
-                            ctx.merge_exclusive_modifier(ExclusiveModifier::OrderedList(count)),
+                            ctx.merge_exclusive_modifier(ExclusiveModifier::OrderedList(count))
+                                .add_stackable_modifier(StackableModifier::InsideList),
                             child,
                         );
                         if st.is_rendered() {
@@ -255,7 +260,7 @@ impl Renderer {
                             .add_stackable_modifier(StackableModifier::KeepPrefixSpace);
 
                         for child in node.children() {
-                            self.render_new_line(context.indent, false);
+                            self.render_new_line(context);
                             self.render_node(context, child);
                         }
 
@@ -268,7 +273,7 @@ impl Renderer {
                             ctx.exclusive_modifier,
                             ExclusiveModifier::Inline | ExclusiveModifier::RequiresSpace
                         ) {
-                            self.render_new_line(ctx.indent, false);
+                            self.render_new_line(ctx);
                         }
 
                         RenderStatus::Rendered
@@ -342,19 +347,11 @@ impl Renderer {
             self.last_line_width += prefix.width();
         }
 
-        // If we are rendering text inside a list (already indented), we have to increase indent
-        // after going to new line. This way text is formatted nicely as:
-        // ```text
-        //   - first line
-        //     second line
-        // ```
-        let increase_indent = ctx.indent > 0;
-
         let mut line_start = true;
         for word in txt.split_whitespace() {
             // Add + 1 for space
             if self.max_width < self.last_line_width + word.width() + 1 {
-                self.render_new_line(ctx.indent, increase_indent);
+                self.render_new_line(ctx);
                 line_start = true;
             }
 
@@ -384,18 +381,20 @@ impl Renderer {
                 }
             }
             ExclusiveModifier::NewLine => {
-                self.render_new_line(ctx.indent, false);
+                self.render_new_line(ctx);
             }
             ExclusiveModifier::NewParagraph => {
-                self.render_new_line(ctx.indent, false);
-                self.render_new_line(ctx.indent, false);
+                self.render_new_line(ctx);
+                self.render_new_line(ctx);
             }
             ExclusiveModifier::UnorderedList => {
-                self.render_new_line(ctx.indent, false);
+                // We have to remove inside list modifier when rendering the first line of the
+                // element.
+                self.render_new_line(ctx.remove_stackable_modifier(StackableModifier::InsideList));
                 self.lines.last_mut().unwrap().push_span("- ");
             }
             ExclusiveModifier::OrderedList(idx) => {
-                self.render_new_line(ctx.indent, false);
+                self.render_new_line(ctx.remove_stackable_modifier(StackableModifier::InsideList));
                 self.lines
                     .last_mut()
                     .unwrap()
@@ -404,15 +403,16 @@ impl Renderer {
         }
     }
 
-    fn render_new_line(&mut self, indent: u16, increase_indent: bool) {
+    fn render_new_line(&mut self, ctx: Context) {
         self.lines.push(Line::default());
 
-        let tabsize = 2;
-        let indent_size = if increase_indent {
-            (indent + 1) * tabsize
+        let indent = if ctx.has_stackable_modifier(StackableModifier::InsideList) {
+            ctx.indent + 1
         } else {
-            indent * tabsize
+            ctx.indent
         };
+
+        let indent_size = indent * TAB_SIZE;
 
         if indent_size > 0 {
             let mut ind = String::new();
