@@ -146,7 +146,7 @@ impl Renderer {
             Node::Element(element) => match element.name() {
                 "script" | "head" | "noscript" | "img" | "picutre" | "audio" | "video"
                 | "source" => RenderStatus::NotRendered, // ignore
-                "span" => {
+                "span" | "button" => {
                     self.render_context(ctx, first_char(node));
                     self.render_children(
                         ctx.set_exclusive_modifier(ExclusiveModifier::Inline),
@@ -226,12 +226,12 @@ impl Renderer {
 
                     status
                 }
-                //     "h1" => render_header(&ctx, 1, node, res),
-                //     "h2" => render_header(&ctx, 2, node, res),
-                //     "h3" => render_header(&ctx, 3, node, res),
-                //     "h4" => render_header(&ctx, 4, node, res),
-                //     "h5" => render_header(&ctx, 5, node, res),
-                //     "h6" => render_header(&ctx, 6, node, res),
+                "h1" => self.render_header(ctx, 1, node),
+                "h2" => self.render_header(ctx, 2, node),
+                "h3" => self.render_header(ctx, 3, node),
+                "h4" => self.render_header(ctx, 4, node),
+                "h5" => self.render_header(ctx, 5, node),
+                "h6" => self.render_header(ctx, 6, node),
                 "code" => {
                     let is_block = node.parent().is_some_and(|p| match p.value() {
                         Node::Element(elt) => elt.name() == "pre",
@@ -311,6 +311,29 @@ impl Renderer {
             Node::Doctype(_) => RenderStatus::NotRendered,
             Node::ProcessingInstruction(_) => RenderStatus::NotRendered,
         }
+    }
+
+    fn render_header(
+        &mut self,
+        ctx: Context,
+        heading: u8,
+        node: NodeRef<'_, Node>,
+    ) -> RenderStatus {
+        self.render_context(
+            ctx.merge_exclusive_modifier(ExclusiveModifier::NewParagraph),
+            Some('#'),
+        );
+
+        for _ in 0..heading {
+            self.render_text(ctx.set_exclusive_modifier(ExclusiveModifier::Inline), "#");
+        }
+
+        self.render_children(
+            ctx.set_exclusive_modifier(ExclusiveModifier::RequiresSpace),
+            node.children(),
+        );
+
+        RenderStatus::Rendered
     }
 
     fn render_children(&mut self, ctx: Context, children: Children<'_, Node>) -> RenderStatus {
@@ -439,33 +462,6 @@ fn first_char(node: NodeRef<'_, Node>) -> Option<char> {
         Node::ProcessingInstruction(_) => None,
     }
 }
-
-// fn render_header(
-//     ctx: &Context,
-//     heading: u8,
-//     node: NodeRef<'_, Node>,
-//     res: &mut String,
-// ) -> RenderStatus {
-//     render_context(&ctx.merge(ContextType::NewParagraph), '#', res);
-//
-//     for _ in 0..heading {
-//         res.push('#')
-//     }
-//
-//     for ch in node.children() {
-//         render_node(
-//             ch,
-//             res,
-//             Context {
-//                 context_type: ContextType::RequiresSpace,
-//                 indent: ctx.indent,
-//                 keep_prefix_space: ctx.keep_prefix_space,
-//             },
-//         );
-//     }
-//
-//     RenderStatus::Rendered
-// }
 
 #[cfg(test)]
 mod test {
