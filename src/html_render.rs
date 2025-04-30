@@ -13,6 +13,7 @@ enum ExclusiveModifier {
     #[default]
     Inline,
     RequiresSpace,
+    NewLine,
     NewParagraph,
     UnorderedList,
     OrderedList(u16),
@@ -38,9 +39,10 @@ impl ExclusiveModifier {
         match self {
             ExclusiveModifier::Inline => 0,
             ExclusiveModifier::RequiresSpace => 1,
-            ExclusiveModifier::NewParagraph => 2,
-            ExclusiveModifier::UnorderedList => 3,
-            ExclusiveModifier::OrderedList(_) => 3,
+            ExclusiveModifier::NewLine => 2,
+            ExclusiveModifier::NewParagraph => 3,
+            ExclusiveModifier::UnorderedList => 4,
+            ExclusiveModifier::OrderedList(_) => 4,
         }
     }
 }
@@ -225,65 +227,53 @@ impl Renderer {
                 //     "h4" => render_header(&ctx, 4, node, res),
                 //     "h5" => render_header(&ctx, 5, node, res),
                 //     "h6" => render_header(&ctx, 6, node, res),
-                //     "code" => {
-                //         let is_block = node.parent().is_some_and(|p| match p.value() {
-                //             Node::Element(elt) => elt.name() == "pre",
-                //             _ => false,
-                //         });
-                //
-                //         if !is_block {
-                //             render_context(&ctx.merge(ContextType::RequiresSpace), '`', res);
-                //
-                //             res.push('`');
-                //             render_node(
-                //                 node.children().next().unwrap(),
-                //                 res,
-                //                 Context {
-                //                     context_type: ContextType::Inline,
-                //                     indent: ctx.indent,
-                //                     keep_prefix_space: ctx.keep_prefix_space,
-                //                 },
-                //             );
-                //             res.push('`');
-                //
-                //             RenderStatus::RenderedRequiresSpace
-                //         } else {
-                //             render_context(&ctx, ' ', res);
-                //             if matches!(
-                //                 ctx.context_type,
-                //                 ContextType::Inline | ContextType::RequiresSpace
-                //             ) {
-                //                 render_new_line(&ctx, res);
-                //             }
-                //
-                //             res.push_str("```");
-                //             for ch in node.children() {
-                //                 render_new_line(&ctx, res);
-                //
-                //                 render_node(
-                //                     ch,
-                //                     res,
-                //                     Context {
-                //                         context_type: ContextType::Inline,
-                //                         indent: ctx.indent,
-                //                         keep_prefix_space: true,
-                //                     },
-                //                 );
-                //             }
-                //
-                //             render_new_line(&ctx, res);
-                //             res.push_str("```");
-                //
-                //             if matches!(
-                //                 ctx.context_type,
-                //                 ContextType::Inline | ContextType::RequiresSpace
-                //             ) {
-                //                 render_new_line(&ctx, res);
-                //             }
-                //
-                //             RenderStatus::Rendered
-                //         }
-                //     }
+                "code" => {
+                    let is_block = node.parent().is_some_and(|p| match p.value() {
+                        Node::Element(elt) => elt.name() == "pre",
+                        _ => false,
+                    });
+
+                    if !is_block {
+                        self.render_text(
+                            ctx.merge_exclusive_modifier(ExclusiveModifier::RequiresSpace),
+                            "`",
+                        );
+
+                        let ctx = ctx.set_exclusive_modifier(ExclusiveModifier::Inline);
+                        self.render_children(ctx, node.children());
+                        self.render_text(ctx, "`");
+
+                        RenderStatus::RenderedRequiresSpace
+                    } else {
+                        self.render_text(
+                            ctx.merge_exclusive_modifier(ExclusiveModifier::NewLine),
+                            "```",
+                        );
+
+                        let context = ctx
+                            .set_exclusive_modifier(ExclusiveModifier::Inline)
+                            .add_stackable_modifier(StackableModifier::KeepPrefixSpace);
+
+                        for child in node.children() {
+                            self.render_new_line(context.indent, false);
+                            self.render_node(context, child);
+                        }
+
+                        self.render_text(
+                            ctx.set_exclusive_modifier(ExclusiveModifier::NewLine),
+                            "```",
+                        );
+
+                        if matches!(
+                            ctx.exclusive_modifier,
+                            ExclusiveModifier::Inline | ExclusiveModifier::RequiresSpace
+                        ) {
+                            self.render_new_line(ctx.indent, false);
+                        }
+
+                        RenderStatus::Rendered
+                    }
+                }
                 _ => {
                     let mut status = RenderStatus::NotRendered;
                     for child in node.children() {
@@ -393,6 +383,9 @@ impl Renderer {
                     self.last_line_width += 1;
                 }
             }
+            ExclusiveModifier::NewLine => {
+                self.render_new_line(ctx.indent, false);
+            }
             ExclusiveModifier::NewParagraph => {
                 self.render_new_line(ctx.indent, false);
                 self.render_new_line(ctx.indent, false);
@@ -480,7 +473,10 @@ mod test {
 
     #[test]
     fn simple() {
-        let lines = render(r#"<p><a href="test">neki</a>. se neki</p>"#, 120);
+        let lines = render(
+            r#"<ul><li>test<pre><code><span>asdf</span><span>  asdf</span></code></pre></li></ul> "#,
+            120,
+        );
         println!("{:?}", lines);
         assert_eq!(lines.len(), 1);
     }
