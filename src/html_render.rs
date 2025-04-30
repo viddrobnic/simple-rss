@@ -56,7 +56,7 @@ impl Context {
         } else {
             let indent = match modifier {
                 ExclusiveModifier::UnorderedList | ExclusiveModifier::OrderedList(_) => {
-                    self.indent + 2
+                    self.indent + 1
                 }
                 _ => self.indent,
             };
@@ -139,10 +139,10 @@ impl Renderer {
             Node::Fragment => self.render_children(ctx, node.children()),
             Node::Text(text) => self.render_text(ctx, &text.text),
             Node::Element(element) => match element.name() {
-                "script" | "head" | "noscript" => RenderStatus::NotRendered, // ignore
+                "script" | "head" | "noscript" | "img" | "picutre" | "audio" | "video"
+                | "source" => RenderStatus::NotRendered, // ignore
                 "span" => {
-                    // TODO: Set first char correctly
-                    self.render_context(ctx, None);
+                    self.render_context(ctx, first_char(node));
                     self.render_children(
                         ctx.set_exclusive_modifier(ExclusiveModifier::Inline),
                         node.children(),
@@ -151,13 +151,12 @@ impl Renderer {
                     RenderStatus::RenderedRequiresSpace
                 }
                 "a" => {
-                    self.render_context(
+                    self.render_text(
                         ctx.merge_exclusive_modifier(ExclusiveModifier::RequiresSpace),
-                        Some('['),
+                        "[",
                     );
 
                     let ctx = ctx.set_exclusive_modifier(ExclusiveModifier::Inline);
-                    self.render_text(ctx, "[");
                     self.render_children(ctx, node.children());
                     self.render_text(ctx, "]");
                     self.render_text(ctx, "(");
@@ -166,47 +165,60 @@ impl Renderer {
 
                     RenderStatus::RenderedRequiresSpace
                 }
-                //     "strong" => {
-                //         render_context(&ctx, ' ', res);
-                //
-                //         res.push_str("**");
-                //         render_children(
-                //             node.children(),
-                //             res,
-                //             Context {
-                //                 context_type: ContextType::Inline,
-                //                 indent: ctx.indent,
-                //                 keep_prefix_space: ctx.keep_prefix_space,
-                //             },
-                //         );
-                //         res.push_str("**");
-                //
-                //         RenderStatus::RenderedRequiresSpace
-                //     }
-                //     "ul" => {
-                //         let mut status = RenderStatus::NotRendered;
-                //         for ch in node.children() {
-                //             let st = render_node(ch, res, ctx.merge(ContextType::UnorderedList));
-                //             if st.is_rendered() {
-                //                 status = RenderStatus::Rendered;
-                //             }
-                //         }
-                //
-                //         status
-                //     }
-                //     "ol" => {
-                //         let mut status = RenderStatus::NotRendered;
-                //         let mut count = 1;
-                //         for ch in node.children() {
-                //             let st = render_node(ch, res, ctx.merge(ContextType::OrderedList(count)));
-                //             if st.is_rendered() {
-                //                 status = RenderStatus::Rendered;
-                //                 count += 1;
-                //             }
-                //         }
-                //
-                //         status
-                //     }
+                "strong" => {
+                    self.render_text(
+                        ctx.merge_exclusive_modifier(ExclusiveModifier::RequiresSpace),
+                        "**",
+                    );
+
+                    let ctx = ctx.set_exclusive_modifier(ExclusiveModifier::Inline);
+                    self.render_children(ctx, node.children());
+                    self.render_text(ctx, "**");
+
+                    RenderStatus::RenderedRequiresSpace
+                }
+                "em" => {
+                    self.render_text(
+                        ctx.merge_exclusive_modifier(ExclusiveModifier::RequiresSpace),
+                        "_",
+                    );
+
+                    let ctx = ctx.set_exclusive_modifier(ExclusiveModifier::Inline);
+                    self.render_children(ctx, node.children());
+                    self.render_text(ctx, "_");
+
+                    RenderStatus::RenderedRequiresSpace
+                }
+                "ul" => {
+                    let mut status = RenderStatus::NotRendered;
+                    for child in node.children() {
+                        let st = self.render_node(
+                            ctx.merge_exclusive_modifier(ExclusiveModifier::UnorderedList),
+                            child,
+                        );
+                        if st.is_rendered() {
+                            status = RenderStatus::Rendered;
+                        }
+                    }
+
+                    status
+                }
+                "ol" => {
+                    let mut status = RenderStatus::NotRendered;
+                    let mut count = 1;
+                    for child in node.children() {
+                        let st = self.render_node(
+                            ctx.merge_exclusive_modifier(ExclusiveModifier::OrderedList(count)),
+                            child,
+                        );
+                        if st.is_rendered() {
+                            status = RenderStatus::Rendered;
+                            count += 1;
+                        }
+                    }
+
+                    status
+                }
                 //     "h1" => render_header(&ctx, 1, node, res),
                 //     "h2" => render_header(&ctx, 2, node, res),
                 //     "h3" => render_header(&ctx, 3, node, res),
@@ -340,20 +352,31 @@ impl Renderer {
             self.last_line_width += prefix.width();
         }
 
-        for (idx, word) in txt.split_whitespace().enumerate() {
+        // If we are rendering text inside a list (already indented), we have to increase indent
+        // after going to new line. This way text is formatted nicely as:
+        // ```text
+        //   - first line
+        //     second line
+        // ```
+        let increase_indent = ctx.indent > 0;
+
+        let mut line_start = true;
+        for word in txt.split_whitespace() {
             // Add + 1 for space
             if self.max_width < self.last_line_width + word.width() + 1 {
-                self.render_new_line(ctx.indent);
+                self.render_new_line(ctx.indent, increase_indent);
+                line_start = true;
             }
 
             let line = self.lines.last_mut().unwrap();
-            if idx > 0 && self.last_line_width != 0 {
+            if !line_start && self.last_line_width != 0 {
                 line.push_span(" ");
                 self.last_line_width += 1;
             }
 
             line.push_span(word.to_string());
             self.last_line_width += word.len();
+            line_start = false;
         }
 
         RenderStatus::Rendered
@@ -371,15 +394,15 @@ impl Renderer {
                 }
             }
             ExclusiveModifier::NewParagraph => {
-                self.render_new_line(ctx.indent);
-                self.render_new_line(ctx.indent);
+                self.render_new_line(ctx.indent, false);
+                self.render_new_line(ctx.indent, false);
             }
             ExclusiveModifier::UnorderedList => {
-                self.render_new_line(ctx.indent);
+                self.render_new_line(ctx.indent, false);
                 self.lines.last_mut().unwrap().push_span("- ");
             }
             ExclusiveModifier::OrderedList(idx) => {
-                self.render_new_line(ctx.indent);
+                self.render_new_line(ctx.indent, false);
                 self.lines
                     .last_mut()
                     .unwrap()
@@ -388,17 +411,39 @@ impl Renderer {
         }
     }
 
-    fn render_new_line(&mut self, indent: u16) {
+    fn render_new_line(&mut self, indent: u16, increase_indent: bool) {
         self.lines.push(Line::default());
 
-        if indent > 0 {
+        let tabsize = 2;
+        let indent_size = if increase_indent {
+            (indent + 1) * tabsize
+        } else {
+            indent * tabsize
+        };
+
+        if indent_size > 0 {
             let mut ind = String::new();
-            for _ in 0..indent {
+            for _ in 0..indent_size {
                 ind.push(' ');
             }
             self.lines.last_mut().unwrap().push_span(ind);
         }
-        self.last_line_width = indent as usize;
+        self.last_line_width = indent_size as usize;
+    }
+}
+
+fn first_char(node: NodeRef<'_, Node>) -> Option<char> {
+    match node.value() {
+        Node::Document | Node::Fragment => node.first_child().and_then(first_char),
+        Node::Text(text) => text.chars().next(),
+        Node::Element(element) => match element.name() {
+            "script" | "head" | "noscript" => None,
+            "a" => Some('['),
+            _ => node.first_child().and_then(first_char),
+        },
+        Node::Comment(_) => None,
+        Node::Doctype(_) => None,
+        Node::ProcessingInstruction(_) => None,
     }
 }
 
