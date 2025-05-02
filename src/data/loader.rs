@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
-use chrono::DateTime;
+use chrono::FixedOffset;
 use futures::future::join_all;
 
 use crate::event::{Event, EventSender};
@@ -78,6 +78,7 @@ impl DataLoader {
 
         if !errors.is_empty() {
             // TODO: Report errors to data sender
+            panic!("refresh: {:?}", errors);
         } else {
             items.sort_by(|a, b| b.pub_date.cmp(&a.pub_date));
 
@@ -100,21 +101,25 @@ impl DataLoader {
 
 async fn get_channel(url: &str) -> anyhow::Result<Vec<Item>> {
     let content = reqwest::get(url).await?.bytes().await?;
-    let channel = rss::Channel::read_from(&content[..])?;
+    let feed = feed_rs::parser::parse(&content[..])?;
 
-    let items: Vec<_> = channel
-        .items
+    let items: Vec<_> = feed
+        .entries
         .into_iter()
         .filter_map(|it| {
             Some(Item {
-                id: format!("{}:{}", url, it.guid.map(|g| g.value)?),
-                channel_name: channel.title.clone(),
-                title: it.title?,
-                description: it.description,
+                id: format!("{}:{}", url, it.id),
+                channel_name: feed
+                    .title
+                    .as_ref()
+                    .map_or("Unnamed Channel".to_string(), |t| t.content.clone()),
+                title: it.title?.content,
+                description: it.summary.map(|d| d.content),
                 pub_date: it
-                    .pub_date
-                    .and_then(|d| DateTime::parse_from_rfc2822(&d).ok()),
-                link: it.link?,
+                    .updated
+                    .or(it.published)
+                    .map(|p| p.with_timezone(&FixedOffset::east_opt(0).unwrap())),
+                link: it.links.first()?.href.clone(),
                 read: false,
             })
         })
