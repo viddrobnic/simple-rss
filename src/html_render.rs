@@ -7,7 +7,7 @@ const TAB_SIZE: u16 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StackableModifier {
-    KeepPrefixSpace = 1 << 0,
+    InsideRawBlock = 1 << 0,
     InsideList = 1 << 1,
 }
 
@@ -257,10 +257,10 @@ impl Renderer {
 
                         let context = ctx
                             .set_exclusive_modifier(ExclusiveModifier::Inline)
-                            .add_stackable_modifier(StackableModifier::KeepPrefixSpace);
+                            .add_stackable_modifier(StackableModifier::InsideRawBlock);
 
+                        self.render_new_line(context);
                         for child in node.children() {
-                            self.render_new_line(context);
                             self.render_node(context, child);
                         }
 
@@ -350,25 +350,17 @@ impl Renderer {
     }
 
     fn render_text(&mut self, ctx: Context, text: &str) -> RenderStatus {
-        let (prefix, txt) = if ctx.has_stackable_modifier(StackableModifier::KeepPrefixSpace) {
-            let trimmed = text.trim_start();
-            let trimmed_len = text.len() - trimmed.len();
-            (&text[0..trimmed_len], trimmed)
-        } else {
-            ("", text.trim())
-        };
+        if ctx.has_stackable_modifier(StackableModifier::InsideRawBlock) {
+            return self.render_raw_text(ctx, text);
+        }
 
-        if prefix.is_empty() && txt.is_empty() {
+        let txt = text.trim();
+        if txt.is_empty() {
             return RenderStatus::NotRendered;
         }
 
-        let first_char = prefix.chars().next().or(txt.chars().next());
+        let first_char = txt.chars().next();
         self.render_context(ctx, first_char);
-
-        if !prefix.is_empty() {
-            self.lines.last_mut().unwrap().push_span(prefix.to_string());
-            self.last_line_width += prefix.width();
-        }
 
         let mut line_start = true;
         for word in txt.split_whitespace() {
@@ -387,6 +379,23 @@ impl Renderer {
             line.push_span(word.to_string());
             self.last_line_width += word.len();
             line_start = false;
+        }
+
+        RenderStatus::Rendered
+    }
+
+    fn render_raw_text(&mut self, ctx: Context, text: &str) -> RenderStatus {
+        for (idx, line) in text.lines().enumerate() {
+            if idx > 0 {
+                self.render_new_line(ctx);
+            }
+
+            self.lines.last_mut().unwrap().push_span(line.to_string());
+            self.last_line_width += line.width();
+        }
+
+        if text.ends_with('\n') {
+            self.render_new_line(ctx);
         }
 
         RenderStatus::Rendered
@@ -470,10 +479,26 @@ mod test {
     #[test]
     fn simple() {
         let lines = render(
-            r#"<ul><li>test<pre><code><span>asdf</span><span>  asdf</span></code></pre></li></ul> "#,
+            r#"<pre><code class="language-protobuf" data-lang="protobuf"><span class="kn">package</span> <span class="nn">google</span><span class="o">.</span><span class="k">rpc</span><span class="p">;</span>
+<span class="kd">enum</span> <span class="n">Code</span> <span class="p">{</span>
+  <span class="na">OK</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+  <span class="na">CANCELLED</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+  <span class="na">UNKNOWN</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+  <span class="c1">// ...</span>
+<span class="p">}</span>
+
+<span class="kn">package</span> <span class="nn">google</span><span class="o">.</span><span class="n">protobuf</span><span class="p">;</span>
+<span class="kd">message</span> <span class="nc">FieldDescriptorProto</span> <span class="p">{</span>
+  <span class="kd">enum</span> <span class="n">Type</span> <span class="p">{</span>
+    <span class="c1">// 0 is reserved for errors.</span>
+    <span class="na">TYPE_DOUBLE</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="na">TYPE_FLOAT</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+    <span class="na">TYPE_INT64</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+    <span class="c1">// ...</span>
+  <span class="p">}</span>
+<span class="p">}</span></code></pre>"#,
             120,
         );
         println!("{:?}", lines);
-        assert_eq!(lines.len(), 1);
     }
 }

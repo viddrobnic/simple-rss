@@ -1,5 +1,4 @@
 use crossterm::event::KeyCode;
-use html2text::from_read;
 use ratatui::{
     Frame,
     layout::Rect,
