@@ -22,10 +22,27 @@ enum ExclusiveModifier {
     OrderedList(u16),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StackableStyle {
+    Bold = 1 << 0,
+    Italic = 1 << 1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum ExclusiveStyle {
+    #[default]
+    Default,
+    Heading,
+    Link,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 struct Context {
     exclusive_modifier: ExclusiveModifier,
     stackable_modifiers: u8,
+
+    exclusive_style: ExclusiveStyle,
+    stackable_styles: u8,
 
     indent: u16,
 }
@@ -50,14 +67,20 @@ impl ExclusiveModifier {
     }
 }
 
+impl ExclusiveStyle {
+    fn precedence(&self) -> u8 {
+        match self {
+            ExclusiveStyle::Default => 0,
+            ExclusiveStyle::Heading => 1,
+            ExclusiveStyle::Link => 2,
+        }
+    }
+}
+
 impl Context {
-    fn merge_exclusive_modifier(&self, modifier: ExclusiveModifier) -> Self {
+    fn merge_exclusive_modifier(mut self, modifier: ExclusiveModifier) -> Self {
         if self.exclusive_modifier.precedence() > modifier.precedence() {
-            Context {
-                exclusive_modifier: self.exclusive_modifier,
-                stackable_modifiers: self.stackable_modifiers,
-                indent: self.indent,
-            }
+            self
         } else {
             let indent = match modifier {
                 ExclusiveModifier::UnorderedList | ExclusiveModifier::OrderedList(_) => {
@@ -66,40 +89,29 @@ impl Context {
                 _ => self.indent,
             };
 
-            Context {
-                exclusive_modifier: modifier,
-                stackable_modifiers: self.stackable_modifiers,
-                indent,
-            }
+            self.exclusive_modifier = modifier;
+            self.indent = indent;
+            self
         }
     }
 
-    fn set_exclusive_modifier(&self, modifier: ExclusiveModifier) -> Self {
-        Context {
-            exclusive_modifier: modifier,
-            stackable_modifiers: self.stackable_modifiers,
-            indent: self.indent,
-        }
+    fn set_exclusive_modifier(mut self, modifier: ExclusiveModifier) -> Self {
+        self.exclusive_modifier = modifier;
+        self
     }
 
     fn has_stackable_modifier(&self, modifier: StackableModifier) -> bool {
         self.stackable_modifiers & modifier as u8 > 0
     }
 
-    fn add_stackable_modifier(&self, modifier: StackableModifier) -> Self {
-        Context {
-            exclusive_modifier: self.exclusive_modifier,
-            stackable_modifiers: self.stackable_modifiers | modifier as u8,
-            indent: self.indent,
-        }
+    fn add_stackable_modifier(mut self, modifier: StackableModifier) -> Self {
+        self.stackable_modifiers |= modifier as u8;
+        self
     }
 
-    fn remove_stackable_modifier(&self, modifier: StackableModifier) -> Self {
-        Context {
-            exclusive_modifier: self.exclusive_modifier,
-            stackable_modifiers: self.stackable_modifiers & !(modifier as u8),
-            indent: self.indent,
-        }
+    fn remove_stackable_modifier(mut self, modifier: StackableModifier) -> Self {
+        self.stackable_modifiers &= !(modifier as u8);
+        self
     }
 }
 
@@ -385,7 +397,12 @@ impl Renderer {
     }
 
     fn render_raw_text(&mut self, ctx: Context, text: &str) -> RenderStatus {
-        for (idx, line) in text.lines().enumerate() {
+        for (idx, line) in text
+            .replace('\r', "")
+            .replace('\t', "    ")
+            .lines()
+            .enumerate()
+        {
             if idx > 0 {
                 self.render_new_line(ctx);
             }
