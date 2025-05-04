@@ -1,5 +1,8 @@
 use ego_tree::{NodeRef, iter::Children};
-use ratatui::text::Line;
+use ratatui::{
+    style::{Color, Style, Stylize},
+    text::{Line, Span},
+};
 use scraper::{Html, Node};
 use unicode_width::UnicodeWidthStr;
 
@@ -18,6 +21,7 @@ enum ExclusiveModifier {
     RequiresSpace,
     NewLine,
     NewParagraph,
+    NewHeading,
     UnorderedList,
     OrderedList(u16),
 }
@@ -32,8 +36,9 @@ enum StackableStyle {
 enum ExclusiveStyle {
     #[default]
     Default,
-    Heading,
+    Code,
     Link,
+    Heading,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -61,8 +66,9 @@ impl ExclusiveModifier {
             ExclusiveModifier::RequiresSpace => 1,
             ExclusiveModifier::NewLine => 2,
             ExclusiveModifier::NewParagraph => 3,
-            ExclusiveModifier::UnorderedList => 4,
-            ExclusiveModifier::OrderedList(_) => 4,
+            ExclusiveModifier::NewHeading => 4,
+            ExclusiveModifier::UnorderedList => 5,
+            ExclusiveModifier::OrderedList(_) => 5,
         }
     }
 }
@@ -71,8 +77,9 @@ impl ExclusiveStyle {
     fn precedence(&self) -> u8 {
         match self {
             ExclusiveStyle::Default => 0,
-            ExclusiveStyle::Heading => 1,
+            ExclusiveStyle::Code => 1,
             ExclusiveStyle::Link => 2,
+            ExclusiveStyle::Heading => 3,
         }
     }
 }
@@ -112,6 +119,51 @@ impl Context {
     fn remove_stackable_modifier(mut self, modifier: StackableModifier) -> Self {
         self.stackable_modifiers &= !(modifier as u8);
         self
+    }
+
+    fn merge_exclusive_style(mut self, style: ExclusiveStyle) -> Self {
+        if self.exclusive_style.precedence() <= style.precedence() {
+            self.exclusive_style = style;
+        }
+
+        self
+    }
+
+    fn set_exclusive_style(mut self, style: ExclusiveStyle) -> Self {
+        self.exclusive_style = style;
+        self
+    }
+
+    fn has_stackable_style(&self, style: StackableStyle) -> bool {
+        self.stackable_styles & style as u8 > 0
+    }
+
+    fn add_stackable_style(mut self, style: StackableStyle) -> Self {
+        self.stackable_styles |= style as u8;
+        self
+    }
+
+    fn remove_stackable_style(mut self, style: StackableStyle) -> Self {
+        self.stackable_styles &= !(style as u8);
+        self
+    }
+
+    fn style(&self) -> Style {
+        let mut style = match self.exclusive_style {
+            ExclusiveStyle::Default => Style::default(),
+            ExclusiveStyle::Code => Style::default().fg(Color::Gray),
+            ExclusiveStyle::Link => Style::default().fg(Color::LightBlue),
+            ExclusiveStyle::Heading => Style::default().fg(Color::Green).bold(),
+        };
+
+        if self.has_stackable_style(StackableStyle::Bold) {
+            style = style.bold();
+        }
+        if self.has_stackable_style(StackableStyle::Italic) {
+            style = style.italic();
+        }
+
+        style
     }
 }
 
@@ -168,6 +220,7 @@ impl Renderer {
                     RenderStatus::RenderedRequiresSpace
                 }
                 "a" => {
+                    let ctx = ctx.merge_exclusive_style(ExclusiveStyle::Link);
                     self.render_text(
                         ctx.merge_exclusive_modifier(ExclusiveModifier::RequiresSpace),
                         "[",
@@ -183,6 +236,8 @@ impl Renderer {
                     RenderStatus::RenderedRequiresSpace
                 }
                 "strong" => {
+                    let ctx = ctx.add_stackable_style(StackableStyle::Bold);
+
                     self.render_text(
                         ctx.merge_exclusive_modifier(ExclusiveModifier::RequiresSpace),
                         "**",
@@ -195,6 +250,7 @@ impl Renderer {
                     RenderStatus::RenderedRequiresSpace
                 }
                 "em" => {
+                    let ctx = ctx.add_stackable_style(StackableStyle::Italic);
                     self.render_text(
                         ctx.merge_exclusive_modifier(ExclusiveModifier::RequiresSpace),
                         "_",
@@ -250,6 +306,7 @@ impl Renderer {
                         _ => false,
                     });
 
+                    let ctx = ctx.merge_exclusive_style(ExclusiveStyle::Code);
                     if !is_block {
                         self.render_text(
                             ctx.merge_exclusive_modifier(ExclusiveModifier::RequiresSpace),
@@ -332,10 +389,11 @@ impl Renderer {
         node: NodeRef<'_, Node>,
     ) -> RenderStatus {
         self.render_context(
-            ctx.merge_exclusive_modifier(ExclusiveModifier::NewParagraph),
+            ctx.merge_exclusive_modifier(ExclusiveModifier::NewHeading),
             Some('#'),
         );
 
+        let ctx = ctx.set_exclusive_style(ExclusiveStyle::Heading);
         for _ in 0..heading {
             self.render_text(ctx.set_exclusive_modifier(ExclusiveModifier::Inline), "#");
         }
@@ -374,6 +432,8 @@ impl Renderer {
         let first_char = txt.chars().next();
         self.render_context(ctx, first_char);
 
+        let style = ctx.style();
+
         let mut line_start = true;
         for word in txt.split_whitespace() {
             // Add + 1 for space
@@ -384,11 +444,11 @@ impl Renderer {
 
             let line = self.lines.last_mut().unwrap();
             if !line_start && self.last_line_width != 0 {
-                line.push_span(" ");
+                line.push_span(Span::from(" ").style(style));
                 self.last_line_width += 1;
             }
 
-            line.push_span(word.to_string());
+            line.push_span(Span::from(word.to_string()).style(style));
             self.last_line_width += word.len();
             line_start = false;
         }
@@ -397,6 +457,8 @@ impl Renderer {
     }
 
     fn render_raw_text(&mut self, ctx: Context, text: &str) -> RenderStatus {
+        let style = ctx.style();
+
         for (idx, line) in text
             .replace('\r', "")
             .replace('\t', "    ")
@@ -407,7 +469,10 @@ impl Renderer {
                 self.render_new_line(ctx);
             }
 
-            self.lines.last_mut().unwrap().push_span(line.to_string());
+            self.lines
+                .last_mut()
+                .unwrap()
+                .push_span(Span::from(line.to_string()).style(style));
             self.last_line_width += line.width();
         }
 
@@ -436,18 +501,25 @@ impl Renderer {
                 self.render_new_line(ctx);
                 self.render_new_line(ctx);
             }
+            ExclusiveModifier::NewHeading => {
+                self.render_new_line(ctx);
+                self.render_new_line(ctx);
+                self.render_new_line(ctx);
+            }
             ExclusiveModifier::UnorderedList => {
                 // We have to remove inside list modifier when rendering the first line of the
                 // element.
                 self.render_new_line(ctx.remove_stackable_modifier(StackableModifier::InsideList));
-                self.lines.last_mut().unwrap().push_span("- ");
-            }
-            ExclusiveModifier::OrderedList(idx) => {
-                self.render_new_line(ctx.remove_stackable_modifier(StackableModifier::InsideList));
                 self.lines
                     .last_mut()
                     .unwrap()
-                    .push_span(format!("{}. ", idx));
+                    .push_span(Span::from("- ").style(Style::default().fg(Color::Gray)));
+            }
+            ExclusiveModifier::OrderedList(idx) => {
+                self.render_new_line(ctx.remove_stackable_modifier(StackableModifier::InsideList));
+                self.lines.last_mut().unwrap().push_span(
+                    Span::from(format!("{}. ", idx)).style(Style::default().fg(Color::Gray)),
+                );
             }
         }
     }
