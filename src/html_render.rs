@@ -349,6 +349,14 @@ impl Renderer {
                     }
                 }
                 _ => {
+                    // Handle roles that are not content
+                    if element
+                        .attr("role")
+                        .is_some_and(|role| role == "dialog" || role == "navigation")
+                    {
+                        return RenderStatus::NotRendered;
+                    }
+
                     let mut status = RenderStatus::NotRendered;
                     for child in node.children() {
                         let context = match status {
