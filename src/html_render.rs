@@ -176,20 +176,22 @@ struct Renderer {
     last_line_width: usize,
 
     max_width: usize,
+    colorize: bool,
 }
 
-pub fn render(html: &str, max_width: usize) -> Vec<Line<'static>> {
+pub fn render(html: &str, max_width: usize, colorize: bool) -> Vec<Line<'static>> {
     let tree = Html::parse_document(html);
-    let renderer = Renderer::new(max_width);
+    let renderer = Renderer::new(max_width, colorize);
     renderer.render(tree)
 }
 
 impl Renderer {
-    fn new(max_width: usize) -> Self {
+    fn new(max_width: usize, colorize: bool) -> Self {
         Self {
             lines: vec![Line::default()],
             last_line_width: 0,
             max_width,
+            colorize,
         }
     }
 
@@ -437,7 +439,7 @@ impl Renderer {
         let first_char = txt.chars().next();
         self.render_context(ctx, first_char);
 
-        let style = ctx.style();
+        let style = self.style(ctx);
 
         let mut line_start = true;
         for word in txt.split_whitespace() {
@@ -462,7 +464,7 @@ impl Renderer {
     }
 
     fn render_raw_text(&mut self, ctx: Context, text: &str) -> RenderStatus {
-        let style = ctx.style();
+        let style = self.style(ctx);
 
         for (idx, line) in text
             .replace('\r', "")
@@ -489,8 +491,6 @@ impl Renderer {
     }
 
     fn render_context(&mut self, ctx: Context, first_char: Option<char>) {
-        // TODO: Handle new lines at the beginning of the file
-
         match ctx.exclusive_modifier {
             ExclusiveModifier::Inline | ExclusiveModifier::ForcedInline => (),
             ExclusiveModifier::RequiresSpace => {
@@ -530,6 +530,11 @@ impl Renderer {
     }
 
     fn render_new_line(&mut self, ctx: Context) {
+        // If we are at the beginning of file, skip adding new line
+        if self.lines.len() <= 1 && self.last_line_width == 0 {
+            return;
+        }
+
         self.lines.push(Line::default());
 
         let indent = if ctx.has_stackable_modifier(StackableModifier::InsideList) {
@@ -549,6 +554,14 @@ impl Renderer {
         }
         self.last_line_width = indent_size as usize;
     }
+
+    fn style(&self, ctx: Context) -> Style {
+        if self.colorize {
+            ctx.style()
+        } else {
+            Style::default()
+        }
+    }
 }
 
 fn first_char(node: NodeRef<'_, Node>) -> Option<char> {
@@ -563,36 +576,5 @@ fn first_char(node: NodeRef<'_, Node>) -> Option<char> {
         Node::Comment(_) => None,
         Node::Doctype(_) => None,
         Node::ProcessingInstruction(_) => None,
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::render;
-
-    #[test]
-    fn simple() {
-        let lines = render(
-            r#"<pre><code class="language-protobuf" data-lang="protobuf"><span class="kn">package</span> <span class="nn">google</span><span class="o">.</span><span class="k">rpc</span><span class="p">;</span>
-<span class="kd">enum</span> <span class="n">Code</span> <span class="p">{</span>
-  <span class="na">OK</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-  <span class="na">CANCELLED</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-  <span class="na">UNKNOWN</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
-  <span class="c1">// ...</span>
-<span class="p">}</span>
-
-<span class="kn">package</span> <span class="nn">google</span><span class="o">.</span><span class="n">protobuf</span><span class="p">;</span>
-<span class="kd">message</span> <span class="nc">FieldDescriptorProto</span> <span class="p">{</span>
-  <span class="kd">enum</span> <span class="n">Type</span> <span class="p">{</span>
-    <span class="c1">// 0 is reserved for errors.</span>
-    <span class="na">TYPE_DOUBLE</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-    <span class="na">TYPE_FLOAT</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
-    <span class="na">TYPE_INT64</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
-    <span class="c1">// ...</span>
-  <span class="p">}</span>
-<span class="p">}</span></code></pre>"#,
-            120,
-        );
-        println!("{:?}", lines);
     }
 }

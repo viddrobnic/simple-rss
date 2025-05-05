@@ -1,10 +1,9 @@
 use crossterm::event::KeyCode;
-use html2text::config;
 use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Style, Stylize},
-    text::{Line, Text},
+    text::{Line, Span, Text},
     widgets::{
         Block, BorderType, List, ListItem, ListState, Scrollbar, ScrollbarOrientation,
         ScrollbarState,
@@ -14,6 +13,7 @@ use ratatui::{
 use crate::{
     data::{DataLoader, Item},
     event::{Event, EventSender, EventState},
+    html_render::render,
 };
 
 pub struct ItemList {
@@ -185,17 +185,11 @@ fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
 
     text.push_line("");
 
-    // TODO: Optimize this, at least not run on every render
-    let desc = config::plain_no_decorate()
-        // width - 4 (space prefix) - 2 (buffer) = width - 6
-        .string_from_read(desc.as_bytes(), width - 6)
-        .unwrap_or_else(|_| desc.clone())
-        .lines()
-        .map(|line| format!("    {line}"))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    text.extend(Text::from(desc));
+    let mut desc_lines = render(desc, width - 6, false);
+    for line in desc_lines.iter_mut() {
+        line.spans.insert(0, Span::from("    "));
+    }
+    text.extend(desc_lines);
 
     text.push_line("");
     ListItem::from(text)

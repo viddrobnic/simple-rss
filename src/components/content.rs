@@ -179,7 +179,7 @@ impl ContentStateData {
     }
 
     fn recalculate_render_cache(&mut self, area: Rect) -> &RenderCache {
-        let lines = render(&self.raw_text, area.width as usize - 2);
+        let lines = render(&self.raw_text, area.width as usize - 2, true);
 
         self.render_cache = Some(RenderCache {
             lines,
