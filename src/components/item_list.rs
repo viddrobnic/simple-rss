@@ -165,11 +165,6 @@ fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
             .map(|s| Line::from(s.clone()).bold().fg(title_col)),
     );
 
-    let Some(desc) = &it.description else {
-        text.push_line("");
-        return ListItem::from(text);
-    };
-
     // Channel name
     let opts = textwrap::Options::new(width - 2)
         .initial_indent("    ")
@@ -183,6 +178,11 @@ fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
     );
 
     // Description
+    let Some(desc) = &it.description else {
+        text.push_line("");
+        return ListItem::from(text);
+    };
+
     text.push_line("");
 
     // TODO: Optimize this, at least not run on every render

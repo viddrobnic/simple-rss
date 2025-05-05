@@ -24,6 +24,7 @@ enum ExclusiveModifier {
     NewHeading,
     UnorderedList,
     OrderedList(u16),
+    ForcedInline,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +70,7 @@ impl ExclusiveModifier {
             ExclusiveModifier::NewHeading => 4,
             ExclusiveModifier::UnorderedList => 5,
             ExclusiveModifier::OrderedList(_) => 5,
+            ExclusiveModifier::ForcedInline => 6,
         }
     }
 }
@@ -140,11 +142,6 @@ impl Context {
 
     fn add_stackable_style(mut self, style: StackableStyle) -> Self {
         self.stackable_styles |= style as u8;
-        self
-    }
-
-    fn remove_stackable_style(mut self, style: StackableStyle) -> Self {
-        self.stackable_styles &= !(style as u8);
         self
     }
 
@@ -226,7 +223,7 @@ impl Renderer {
                         "[",
                     );
 
-                    let ctx = ctx.set_exclusive_modifier(ExclusiveModifier::Inline);
+                    let ctx = ctx.set_exclusive_modifier(ExclusiveModifier::ForcedInline);
                     self.render_children(ctx, node.children());
                     self.render_text(ctx, "]");
                     self.render_text(ctx, "(");
@@ -495,7 +492,7 @@ impl Renderer {
         // TODO: Handle new lines at the beginning of the file
 
         match ctx.exclusive_modifier {
-            ExclusiveModifier::Inline => (),
+            ExclusiveModifier::Inline | ExclusiveModifier::ForcedInline => (),
             ExclusiveModifier::RequiresSpace => {
                 if first_char.is_none_or(|c| c != '.' && c != ',' && c != ';') {
                     self.lines.last_mut().unwrap().push_span(" ");
