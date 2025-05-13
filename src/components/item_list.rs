@@ -111,9 +111,16 @@ impl ItemList {
     }
 
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
+        let instructions = Line::from(vec![
+            "Select ".into(),
+            "<Enter>  ".blue().bold(),
+            "Exit ".into(),
+            "<Esc> / <q>".blue().bold(),
+        ]);
         let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
-            .title(Line::from("Items"));
+            .title(Line::from("Items"))
+            .title_bottom(instructions.centered());
         if !self.focused {
             block = block.border_style(Color::Gray)
         }

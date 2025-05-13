@@ -41,7 +41,7 @@ https://feed-two.com/atom.xml
 A list of things that need to be done:
 
 - [ ] Cache rendered text in item list.
-- [ ] Improve keyboard navigation.
+- [x] Improve keyboard navigation.
 - [ ] Loading status, animations and progress reporting.
 - [ ] Error reporting.
 - [ ] Renaming channels

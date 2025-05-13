@@ -2,7 +2,7 @@ use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::Color,
+    style::{Color, Stylize},
     text::Line,
     widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
@@ -119,7 +119,15 @@ impl Content {
 }
 
 fn basic_block(selected: bool) -> Block<'static> {
-    let mut block = Block::bordered().border_type(BorderType::Rounded);
+    let instructions = Line::from(vec![
+        "Back ".into(),
+        "<Esc> / <q> / <Left>  ".blue().bold(),
+        "Focus ".into(),
+        "<Right>".blue().bold(),
+    ]);
+    let mut block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .title_bottom(instructions.centered());
     if !selected {
         block = block.border_style(Color::Gray);
     }

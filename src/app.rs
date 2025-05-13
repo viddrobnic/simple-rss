@@ -17,8 +17,6 @@ enum Focus {
 }
 
 pub struct App {
-    data_loader: DataLoader,
-
     focus: Focus,
 
     item_list: ItemList,
@@ -35,7 +33,6 @@ impl App {
             item_list: ItemList::new(true, event_sender, data_loader.clone()),
             content: Content::new(false),
             focus: Focus::ItemList,
-            data_loader,
         })
     }
 
@@ -64,8 +61,8 @@ impl App {
 
         // Move focus
         match event {
-            Event::Keyboard(key) => {
-                if key.code == KeyCode::Char('q') || key.code == KeyCode::Esc {
+            Event::Keyboard(key) => match key.code {
+                KeyCode::Char('q') | KeyCode::Esc | KeyCode::Char('h') | KeyCode::Left => {
                     match self.focus {
                         Focus::ItemList => EventState::NotConsumed,
                         Focus::Content => {
@@ -75,10 +72,18 @@ impl App {
                             EventState::Consumed
                         }
                     }
-                } else {
-                    EventState::NotConsumed
                 }
-            }
+                KeyCode::Char('l') | KeyCode::Right => match self.focus {
+                    Focus::ItemList => {
+                        self.focus = Focus::Content;
+                        self.item_list.set_focused(false);
+                        self.content.set_focused(true);
+                        EventState::Consumed
+                    }
+                    Focus::Content => EventState::NotConsumed,
+                },
+                _ => EventState::NotConsumed,
+            },
             Event::StartLoadingItem => match self.focus {
                 Focus::ItemList => {
                     self.focus = Focus::Content;
