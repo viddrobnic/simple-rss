@@ -12,6 +12,19 @@ use crate::{
     html_render::render,
 };
 
+const SPINNER_FRAMES: [u32; 10] = [
+    0x280B, // ⠋
+    0x2819, // ⠙
+    0x2839, // ⠹
+    0x2838, // ⠸
+    0x283C, // ⠼
+    0x2834, // ⠴
+    0x2826, // ⠦
+    0x2827, // ⠧
+    0x2807, // ⠇
+    0x280F, // ⠏
+];
+
 #[derive(Default)]
 enum ContentState {
     #[default]
@@ -111,7 +124,12 @@ impl Content {
         let block = basic_block(self.focused);
         frame.render_widget(block, area);
 
-        let paragraph = Paragraph::new(format!("Loading {tick}")).centered();
+        let ch = SPINNER_FRAMES[(tick as usize / 3) % SPINNER_FRAMES.len()];
+
+        // Safe because chars are hardcoded
+        let ch = unsafe { char::from_u32_unchecked(ch) };
+
+        let paragraph = Paragraph::new(format!("Loading {ch}")).centered();
 
         area.y = area.height / 2;
         frame.render_widget(paragraph, area);
