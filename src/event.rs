@@ -4,7 +4,7 @@ use crossterm::event::{Event as CrosstermEvent, KeyEvent};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
-const TICK_FPS: f64 = 30.0;
+pub const TICK_FPS: f64 = 30.0;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
@@ -13,6 +13,10 @@ pub enum Event {
 
     StartLoadingItem,
     LoadedItem(String),
+
+    ToastLoading(String),
+    ToastError(String),
+    ToastHide,
 }
 
 #[derive(Debug, Clone)]

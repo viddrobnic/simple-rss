@@ -58,6 +58,9 @@ impl DataLoader {
     }
 
     pub async fn refresh(&mut self) {
+        self.sender
+            .send(Event::ToastLoading("Refreshing".to_string()));
+
         // This syntax is used as workaround for clippy - making sure that lock is dropped before
         // await
         let channels = {
@@ -76,10 +79,7 @@ impl DataLoader {
             }
         }
 
-        if !errors.is_empty() {
-            // TODO: Report errors to data sender
-            panic!("refresh: {:?}", errors);
-        } else {
+        if errors.is_empty() {
             items.sort_by(|a, b| b.pub_date.cmp(&a.pub_date));
 
             let mut lock = self.data.write().unwrap();
@@ -95,6 +95,11 @@ impl DataLoader {
             }
 
             lock.items = items;
+
+            self.sender.send(Event::ToastHide);
+        } else {
+            self.sender
+                .send(Event::ToastError("Failed to refresh data!".to_string()));
         }
     }
 }

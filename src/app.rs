@@ -5,7 +5,7 @@ use ratatui::{
 };
 
 use crate::{
-    components::{Content, ItemList},
+    components::{Content, ItemList, Toast},
     data::DataLoader,
     event::{Event, EventSender, EventState},
 };
@@ -21,6 +21,7 @@ pub struct App {
 
     item_list: ItemList,
     content: Content,
+    toast: Toast,
 }
 
 impl App {
@@ -30,9 +31,10 @@ impl App {
         tokio::spawn(async move { loader.refresh().await });
 
         Ok(Self {
+            focus: Focus::ItemList,
             item_list: ItemList::new(true, event_sender, data_loader.clone()),
             content: Content::new(false),
-            focus: Focus::ItemList,
+            toast: Toast::new(),
         })
     }
 
@@ -45,6 +47,7 @@ impl App {
 
         self.item_list.draw(frame, layout[0]);
         self.content.draw(frame, layout[1]);
+        self.toast.draw(frame);
     }
 
     pub fn handle_event(&mut self, event: &Event) -> EventState {
@@ -55,6 +58,11 @@ impl App {
         }
 
         let state = self.content.handle_event(event);
+        if state.is_consumed() {
+            return EventState::Consumed;
+        }
+
+        let state = self.toast.handle_event(event);
         if state.is_consumed() {
             return EventState::Consumed;
         }
@@ -95,6 +103,9 @@ impl App {
             },
             Event::Tick => EventState::NotConsumed,
             Event::LoadedItem(_) => EventState::NotConsumed,
+            Event::ToastLoading(_) | Event::ToastError(_) | Event::ToastHide => {
+                EventState::NotConsumed
+            }
         }
     }
 }
