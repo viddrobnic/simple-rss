@@ -3,7 +3,7 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Style, Stylize},
-    text::{Line, Span, Text},
+    text::{Line, Text},
     widgets::{
         Block, BorderType, List, ListItem, ListState, Scrollbar, ScrollbarOrientation,
         ScrollbarState,
@@ -13,7 +13,6 @@ use ratatui::{
 use crate::{
     data::{DataLoader, Item},
     event::{Event, EventSender, EventState},
-    html_render::render,
 };
 
 pub struct ItemList {
@@ -23,6 +22,14 @@ pub struct ItemList {
 
     event_tx: EventSender,
     data_loader: DataLoader,
+
+    render_cache: Option<RenderCache>,
+}
+
+struct RenderCache {
+    list: List<'static>,
+    width: u16,
+    version: u16,
 }
 
 impl ItemList {
@@ -32,6 +39,7 @@ impl ItemList {
             list_state: ListState::default(),
             event_tx,
             data_loader,
+            render_cache: None,
         }
     }
 
@@ -124,30 +132,61 @@ impl ItemList {
         if !self.focused {
             block = block.border_style(Color::Gray)
         }
+        let list_area = block.inner(area);
+        frame.render_widget(block, area);
 
         // List
-        let data = self.data_loader.get_data();
-        let list = List::new(data.items.iter().enumerate().map(|(idx, it)| {
-            item_to_list_item(
-                it,
-                self.list_state.selected() == Some(idx),
-                area.width as usize,
-            )
-        }))
-        .block(block)
-        .highlight_style(Style::default().bg(Color::Blue));
+        let mut list_state = self.list_state.clone();
+        let list = self.get_render_cache(list_area);
+        let nr_items = list.list.len();
 
-        frame.render_stateful_widget(list, area, &mut self.list_state);
+        frame.render_stateful_widget(&list.list, list_area, &mut list_state);
+        self.list_state = list_state;
 
         // Scrollbar
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut bar_state =
-            ScrollbarState::new(data.items.len()).position(self.list_state.selected().unwrap_or(0));
+            ScrollbarState::new(nr_items).position(self.list_state.selected().unwrap_or(0));
         frame.render_stateful_widget(scroll_bar, area, &mut bar_state);
+    }
+
+    fn recalculate_render_cache(&mut self, area: Rect) -> &RenderCache {
+        let data = self.data_loader.get_data();
+        let list = List::new(
+            data.items
+                .iter()
+                .map(|it| item_to_list_item(it, area.width as usize)),
+        )
+        .highlight_style(Style::default().bg(Color::DarkGray));
+
+        self.render_cache = Some(RenderCache {
+            list,
+            width: area.width,
+            version: data.version,
+        });
+
+        self.render_cache.as_ref().unwrap()
+    }
+
+    fn get_render_cache(&mut self, area: Rect) -> &RenderCache {
+        let Some(render_cache) = &self.render_cache else {
+            return self.recalculate_render_cache(area);
+        };
+
+        let version = {
+            let data = self.data_loader.get_data();
+            data.version
+        };
+
+        if render_cache.width != area.width || render_cache.version != version {
+            return self.recalculate_render_cache(area);
+        }
+
+        self.render_cache.as_ref().unwrap()
     }
 }
 
-fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
+fn item_to_list_item(it: &Item, width: usize) -> ListItem<'static> {
     // Title
     let mut opts = textwrap::Options::new(width - 2)
         .subsequent_indent("    ")
@@ -161,15 +200,10 @@ fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
     let mut text = Text::default();
 
     let title = textwrap::wrap(&it.title, &opts);
-    let title_col = if selected {
-        Color::LightGreen
-    } else {
-        Color::Green
-    };
     text.extend(
         title
             .iter()
-            .map(|s| Line::from(s.clone()).bold().fg(title_col)),
+            .map(|s| Line::from(s.to_string()).bold().fg(Color::LightGreen)),
     );
 
     // Channel name
@@ -181,22 +215,8 @@ fn item_to_list_item(it: &Item, selected: bool, width: usize) -> ListItem {
     text.extend(
         channel
             .iter()
-            .map(|s| Line::from(s.clone()).bold().fg(Color::Gray)),
+            .map(|s| Line::from(s.to_string()).bold().fg(Color::Gray)),
     );
-
-    // Description
-    let Some(desc) = &it.description else {
-        text.push_line("");
-        return ListItem::from(text);
-    };
-
-    text.push_line("");
-
-    let mut desc_lines = render(desc, width - 6, false);
-    for line in desc_lines.iter_mut() {
-        line.spans.insert(0, Span::from("    "));
-    }
-    text.extend(desc_lines);
 
     text.push_line("");
     ListItem::from(text)

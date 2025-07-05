@@ -40,7 +40,7 @@ https://feed-two.com/atom.xml
 
 A list of things that need to be done:
 
-- [ ] Cache rendered text in item list.
+- [x] Cache rendered text in item list.
 - [x] Improve keyboard navigation.
 - [x] Loading status, animations and progress reporting.
 - [ ] Error reporting.

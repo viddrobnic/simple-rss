@@ -29,6 +29,7 @@ pub struct Item {
 pub struct Data {
     pub channels: Vec<String>,
     pub items: Vec<Item>,
+    pub version: u16,
 }
 
 impl Data {
@@ -36,7 +37,11 @@ impl Data {
         let items = load_items()?;
         let channels = load_channels()?;
 
-        Ok(Self { items, channels })
+        Ok(Self {
+            items,
+            channels,
+            version: 0,
+        })
     }
 
     fn save(&self) -> anyhow::Result<()> {

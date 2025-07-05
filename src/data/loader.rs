@@ -95,6 +95,7 @@ impl DataLoader {
             }
 
             lock.items = items;
+            lock.version += 1;
 
             self.sender.send(Event::ToastHide);
         } else {
