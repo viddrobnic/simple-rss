@@ -153,7 +153,7 @@ impl ContentStateData {
                 let nr_lines = self.render_cache.as_ref().map(|c| c.lines.len());
                 if let Some(nr_lines) = nr_lines {
                     self.scroll_offset += 1;
-                    self.scroll_offset = self.scroll_offset.min(nr_lines - 1);
+                    self.scroll_offset = self.scroll_offset.min(nr_lines.saturating_sub(5));
                 }
 
                 EventState::Consumed
@@ -167,16 +167,23 @@ impl ContentStateData {
         let cache = self.get_render_cache(area);
 
         let block = basic_block(focused);
+        frame.render_widget(block, area);
 
-        let paragraph = Paragraph::new(cache.lines.clone())
-            .block(block)
-            .scroll((scroll_offset as u16, 0));
-
-        frame.render_widget(paragraph, area);
+        let lines = cache
+            .lines
+            .iter()
+            .skip(scroll_offset + 1)
+            .take((area.height as usize) - 2);
+        for (idx, line) in lines.enumerate() {
+            frame.render_widget(
+                line,
+                Rect::new(area.x + 1, area.y + idx as u16 + 1, area.width - 2, 1),
+            );
+        }
 
         // Scrollbar
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-        let mut bar_state = ScrollbarState::new(cache.lines.len()).position(scroll_offset);
+        let mut bar_state = ScrollbarState::new(cache.lines.len() - 5).position(scroll_offset);
         frame.render_stateful_widget(scroll_bar, area, &mut bar_state);
     }
 

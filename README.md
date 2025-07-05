@@ -42,7 +42,7 @@ A list of things that need to be done:
 
 - [ ] Cache rendered text in item list.
 - [x] Improve keyboard navigation.
-- [ ] Loading status, animations and progress reporting.
+- [x] Loading status, animations and progress reporting.
 - [ ] Error reporting.
 - [ ] Renaming channels
 - [ ] Better channel management (adding, removing, updating channels).
