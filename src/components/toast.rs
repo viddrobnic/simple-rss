@@ -1,7 +1,8 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    widgets::{Block, Clear, Paragraph},
+    style::{Color, Stylize},
+    widgets::{Block, BorderType, Clear, Paragraph},
 };
 
 use crate::event::{Event, EventState, TICK_FPS};
@@ -77,13 +78,24 @@ impl Toast {
         let area = frame.area();
 
         let width = 30;
-        let height = 4;
+        let height = 3;
 
         let x = area.width - width - 2;
         let y = area.height - height - 1;
 
         let area = Rect::new(x, y, width, height);
         frame.render_widget(Clear, area);
+
+        let color = match self {
+            Toast::Loading { .. } => Color::Cyan,
+            Toast::Error { .. } => Color::Red,
+            Toast::Hidden => unreachable!(),
+        };
+
+        let block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(color);
+        frame.render_widget(block, area);
 
         let paragraph = match self {
             Toast::Loading { message, ticks } => {
@@ -94,9 +106,10 @@ impl Toast {
             Toast::Hidden => unreachable!(),
         };
 
-        let paragraph =
-            paragraph.block(Block::bordered().border_type(ratatui::widgets::BorderType::Rounded));
-        frame.render_widget(paragraph, area);
+        frame.render_widget(
+            paragraph.style(color).bold(),
+            Rect::new(x + 2, y + 1, width - 4, height - 2),
+        );
     }
 
     fn hidden(&self) -> bool {

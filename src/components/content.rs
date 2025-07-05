@@ -117,7 +117,6 @@ impl Content {
         frame.render_widget(block, area);
 
         let ch = spinner_frame(tick as usize);
-
         let paragraph = Paragraph::new(format!("Loading {ch}")).centered();
 
         area.y = area.height / 2;
