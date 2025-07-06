@@ -3,12 +3,13 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Style, Stylize},
-    text::{Line, Text},
+    text::{Line, Span, Text},
     widgets::{
         Block, BorderType, List, ListItem, ListState, Scrollbar, ScrollbarOrientation,
         ScrollbarState,
     },
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::{
     data::{DataLoader, Item},
@@ -188,7 +189,7 @@ impl ItemList {
 
 fn item_to_list_item(it: &Item, width: usize) -> ListItem<'static> {
     // Title
-    let mut opts = textwrap::Options::new(width - 2)
+    let mut opts = textwrap::Options::new(width - 1)
         .subsequent_indent("    ")
         .break_words(true);
     if it.read {
@@ -206,17 +207,56 @@ fn item_to_list_item(it: &Item, width: usize) -> ListItem<'static> {
             .map(|s| Line::from(s.to_string()).bold().fg(Color::LightGreen)),
     );
 
-    // Channel name
     let opts = textwrap::Options::new(width - 2)
         .initial_indent("    ")
         .subsequent_indent("    ")
         .break_words(true);
+
+    // Channel name
+    let Some(date) = &it.pub_date else {
+        let channel = textwrap::wrap(&it.channel_name, &opts);
+        text.extend(
+            channel
+                .iter()
+                .map(|s| Line::from(s.to_string()).bold().fg(Color::Gray)),
+        );
+
+        text.push_line("");
+        return ListItem::from(text);
+    };
+
+    let pub_time = format!("{}", date.format("%Y-%m-%d"));
+
+    // 4 spaces at the beginning
+    let total_width = it.channel_name.width() + pub_time.width() + 4;
+
+    // Everything can fit on one line, we can do the nice formatting.
+    if total_width < width - 3 {
+        // 3 = Some buffer to have space around things
+        let mut line = Line::from("    ");
+        line.push_span(Span::from(it.channel_name.clone()).bold().fg(Color::Gray));
+
+        let space = width - total_width - 1;
+        for _ in 0..space {
+            line.push_span(" ");
+        }
+
+        line.push_span(Span::from(pub_time).fg(Color::Gray));
+
+        text.push_line(line);
+        text.push_line("");
+
+        return ListItem::from(text);
+    }
+
+    // We have to split by lines
     let channel = textwrap::wrap(&it.channel_name, &opts);
     text.extend(
         channel
             .iter()
             .map(|s| Line::from(s.to_string()).bold().fg(Color::Gray)),
     );
+    text.push_line(Line::from(format!("    {pub_time}")).fg(Color::Gray));
 
     text.push_line("");
     ListItem::from(text)
