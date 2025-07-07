@@ -40,6 +40,7 @@ impl DataLoader {
     pub fn set_read(&mut self, index: usize, read: bool) {
         let mut lock = self.data.write().unwrap();
         lock.items[index].read = read;
+        lock.version += 1;
     }
 
     pub async fn load_item(&self, url: &str) {

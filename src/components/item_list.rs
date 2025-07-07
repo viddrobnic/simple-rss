@@ -121,10 +121,10 @@ impl ItemList {
 
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let instructions = Line::from(vec![
-            "Select ".into(),
-            "<Enter>  ".blue().bold(),
             "Exit ".into(),
-            "<Esc> / <q>".blue().bold(),
+            "<Esc> / <q>  ".blue().bold(),
+            "Help ".into(),
+            "<?>".blue().bold(),
         ]);
         let mut block = Block::bordered()
             .border_type(BorderType::Rounded)

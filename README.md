@@ -46,7 +46,7 @@ A list of things that need to be done:
 - [ ] Error reporting.
 - [ ] Renaming channels
 - [ ] Better channel management (adding, removing, updating channels).
-- [ ] Help menu.
+- [x] Help menu.
 - [ ] Improve HTML rendering.
 
 ## License

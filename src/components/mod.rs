@@ -1,8 +1,10 @@
 mod content;
+mod help;
 mod item_list;
 mod toast;
 
 pub use content::Content;
+pub use help::Help;
 pub use item_list::ItemList;
 pub use toast::Toast;
 
