@@ -8,7 +8,7 @@ use futures::future::join_all;
 
 use crate::event::{Event, EventSender};
 
-use super::{Data, Item};
+use super::{Channel, Data, Item};
 
 #[derive(Clone)]
 pub struct DataLoader {
@@ -69,7 +69,7 @@ impl DataLoader {
             lock.channels.clone()
         };
 
-        let res = join_all(channels.iter().map(|ch| get_channel(ch))).await;
+        let res = join_all(channels.iter().map(get_channel)).await;
 
         let mut items = vec![];
         let mut errors = vec![];
@@ -106,8 +106,8 @@ impl DataLoader {
     }
 }
 
-async fn get_channel(url: &str) -> anyhow::Result<Vec<Item>> {
-    let content = reqwest::get(url).await?.bytes().await?;
+async fn get_channel(channel: &Channel) -> anyhow::Result<Vec<Item>> {
+    let content = reqwest::get(&channel.url).await?.bytes().await?;
     let feed = feed_rs::parser::parse(&content[..])?;
 
     let items: Vec<_> = feed
@@ -115,11 +115,15 @@ async fn get_channel(url: &str) -> anyhow::Result<Vec<Item>> {
         .into_iter()
         .filter_map(|it| {
             Some(Item {
-                id: format!("{}:{}", url, it.id),
-                channel_name: feed
-                    .title
-                    .as_ref()
-                    .map_or("Unnamed Channel".to_string(), |t| t.content.clone()),
+                id: format!("{}:{}", channel.url, it.id),
+                channel_name: channel.name.as_ref().map_or_else(
+                    || {
+                        feed.title
+                            .as_ref()
+                            .map_or("Unnamed Channel".to_string(), |t| t.content.clone())
+                    },
+                    |v| v.clone(),
+                ),
                 title: it.title?.content,
                 description: it.summary.map(|d| d.content),
                 pub_date: it

@@ -5,7 +5,7 @@ use ratatui::{
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
-        Block, BorderType, List, ListItem, ListState, Scrollbar, ScrollbarOrientation,
+        Block, BorderType, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
         ScrollbarState,
     },
 };
@@ -141,6 +141,11 @@ impl ItemList {
         let list = self.get_render_cache(list_area);
         let nr_items = list.list.len();
 
+        if nr_items == 0 {
+            self.draw_empty(frame, list_area);
+            return;
+        }
+
         frame.render_stateful_widget(&list.list, list_area, &mut list_state);
         self.list_state = list_state;
 
@@ -149,6 +154,17 @@ impl ItemList {
         let mut bar_state =
             ScrollbarState::new(nr_items).position(self.list_state.selected().unwrap_or(0));
         frame.render_stateful_widget(scroll_bar, area, &mut bar_state);
+    }
+
+    fn draw_empty(&self, frame: &mut Frame, mut area: Rect) {
+        let paragraph = Paragraph::new(vec![
+            Line::from("Add channels to get started").bold(),
+            Line::from(vec!["See ".into(), "simple-rss help".fg(Color::DarkGray)]),
+        ])
+        .centered();
+
+        area.y = area.height / 2;
+        frame.render_widget(paragraph, area);
     }
 
     fn recalculate_render_cache(&mut self, area: Rect) -> &RenderCache {

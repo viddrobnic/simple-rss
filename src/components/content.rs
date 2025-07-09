@@ -2,7 +2,7 @@ use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::Color,
+    style::{Color, Stylize},
     text::Line,
     widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
@@ -106,7 +106,9 @@ impl Content {
         let block = basic_block(self.focused);
         frame.render_widget(block, area);
 
-        let paragraph = Paragraph::new("Select an item to get started").centered();
+        let paragraph = Paragraph::new("Select an item to get started")
+            .bold()
+            .centered();
 
         area.y = area.height / 2;
         frame.render_widget(paragraph, area);
