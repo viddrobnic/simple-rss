@@ -1,8 +1,10 @@
 use app::App;
 use clap::{Parser, Subcommand};
+use colored::{ColoredString, Colorize};
 use crossterm::event::KeyCode;
-use data::DataLoader;
+use data::{Channel, Data, DataLoader};
 use event::{Event, EventHandler};
+use unicode_width::UnicodeWidthStr;
 
 mod app;
 mod components;
@@ -11,6 +13,9 @@ mod event;
 mod html_render;
 mod path;
 mod state;
+
+const NAME_TITLE: &str = "Name";
+const URL_TITLE: &str = "URL";
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about)]
@@ -90,7 +95,91 @@ async fn run() -> anyhow::Result<()> {
 
 fn manage_channel(cmd: ChannelCommands) -> anyhow::Result<()> {
     match cmd {
-        ChannelCommands::List => todo!(),
+        ChannelCommands::List => list_channels(),
         ChannelCommands::Add { url, name } => todo!(),
+    }
+}
+
+fn list_channels() -> anyhow::Result<()> {
+    let data = Data::load()?;
+    if data.channels.is_empty() {
+        println!(
+            "No channels added!\nRun `{}` to add a channel.",
+            "simple-rss ch add".white()
+        );
+        return Ok(());
+    }
+
+    let (mut name_len, mut url_len) = data.channels.iter().fold((0, 0), |(n, u), it| {
+        (
+            n.max(it.name.as_ref().map_or(0, |v| v.width())),
+            u.max(it.url.len()),
+        )
+    });
+
+    if name_len < NAME_TITLE.len() {
+        name_len = NAME_TITLE.len();
+    }
+    name_len += 2; // Space around
+
+    if url_len < URL_TITLE.len() {
+        url_len = URL_TITLE.len();
+    }
+    url_len += 1; // Space at the left
+
+    // Print header
+    print!("{} │", "idx".bold());
+    print_center(name_len, NAME_TITLE.bold());
+    print!("│");
+    print_center(url_len, URL_TITLE.bold());
+    println!();
+
+    print!("────┼");
+    for _ in 0..name_len {
+        print!("─");
+    }
+    print!("┼");
+    for _ in 0..url_len {
+        print!("─");
+    }
+    println!();
+
+    for (idx, ch) in data.channels.iter().enumerate() {
+        print_channel(idx, ch, name_len);
+    }
+
+    Ok(())
+}
+
+fn print_channel(idx: usize, ch: &Channel, name_len: usize) {
+    let idx = idx.to_string();
+    print!("{}", idx.white());
+    for _ in 0..(4 - idx.len()) {
+        print!(" ")
+    }
+    print!("│ ");
+
+    if let Some(name) = &ch.name {
+        print!("{}", name);
+    }
+
+    let space = name_len - 1 - ch.name.as_ref().map_or(0, |n| n.width());
+    for _ in 0..space {
+        print!(" ");
+    }
+    print!("│ ");
+
+    println!("{}", ch.url.blue());
+}
+
+fn print_center(len: usize, val: ColoredString) {
+    let space = (len - val.chars().count()) / 2;
+    for _ in 0..space {
+        print!(" ");
+    }
+    print!("{}", val);
+    let space = len - val.chars().count() - space;
+    for _ in 0..space {
+        print!(" ");
     }
 }

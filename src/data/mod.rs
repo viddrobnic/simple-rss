@@ -35,7 +35,7 @@ pub struct Data {
 }
 
 impl Data {
-    fn load() -> anyhow::Result<Self> {
+    pub fn load() -> anyhow::Result<Self> {
         let items = load_items()?;
         let channels = load_channels()?;
 
@@ -46,7 +46,7 @@ impl Data {
         })
     }
 
-    fn save(&self) -> anyhow::Result<()> {
+    pub fn save(&self) -> anyhow::Result<()> {
         save_items(&self.items)?;
         save_channels(&self.channels)?;
         Ok(())
