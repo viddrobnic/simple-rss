@@ -45,7 +45,7 @@ A list of things that need to be done:
 - [x] Loading status, animations and progress reporting.
 - [ ] Error reporting.
 - [ ] Renaming channels
-- [ ] Better channel management (adding, removing, updating channels).
+- [x] Better channel management (adding, removing, updating channels).
 - [x] Help menu.
 - [ ] Improve HTML rendering.
 

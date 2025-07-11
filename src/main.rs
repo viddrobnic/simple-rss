@@ -52,6 +52,29 @@ enum ChannelCommands {
         #[arg(long)]
         name: Option<String>,
     },
+
+    /// Remove a channel
+    #[clap(visible_alias = "rm")]
+    Remove {
+        /// Index of the channel to remove.
+        /// Run `simple-rss channel list` to see indices.
+        idx: usize,
+    },
+
+    /// Edit a channel
+    Edit {
+        /// Index of the channel to remove.
+        /// Run `simple-rss channel list` to see indices.
+        idx: usize,
+
+        /// Custom name for the feed
+        #[arg(long)]
+        name: Option<String>,
+
+        /// URL of the feed
+        #[arg(long)]
+        url: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -96,8 +119,59 @@ async fn run() -> anyhow::Result<()> {
 fn manage_channel(cmd: ChannelCommands) -> anyhow::Result<()> {
     match cmd {
         ChannelCommands::List => list_channels(),
-        ChannelCommands::Add { url, name } => todo!(),
+        ChannelCommands::Add { url, name } => add_channel(Channel { name, url }),
+        ChannelCommands::Remove { idx } => remove_channel(idx),
+        ChannelCommands::Edit { idx, name, url } => edit_channel(idx, name, url),
     }
+}
+
+fn add_channel(channel: Channel) -> anyhow::Result<()> {
+    let mut data = Data::load()?;
+    data.channels.push(channel);
+    data.save()?;
+
+    println!("✅ {}", "Channel added!".green().bold());
+
+    Ok(())
+}
+
+fn remove_channel(idx: usize) -> anyhow::Result<()> {
+    let mut data = Data::load()?;
+    if idx >= data.channels.len() {
+        println!("{}", "Invalid index!".yellow().bold());
+        return Ok(());
+    }
+
+    data.channels.remove(idx);
+    data.save()?;
+
+    println!("✅ {}", "Channel removed!".green().bold());
+    Ok(())
+}
+
+fn edit_channel(idx: usize, name: Option<String>, url: Option<String>) -> anyhow::Result<()> {
+    if name.is_none() && url.is_none() {
+        println!("{}", "Nothing to do!".bold());
+        return Ok(());
+    }
+
+    let mut data = Data::load()?;
+    if idx >= data.channels.len() {
+        println!("{}", "Invalid index!".yellow().bold());
+        return Ok(());
+    }
+
+    if name.is_some() {
+        data.channels[idx].name = name;
+    }
+    if let Some(url) = url {
+        data.channels[idx].url = url;
+    }
+    data.save()?;
+
+    println!("✅ {}", "Channel updated!".green().bold());
+
+    Ok(())
 }
 
 fn list_channels() -> anyhow::Result<()> {
