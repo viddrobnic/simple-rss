@@ -1,4 +1,3 @@
-use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -8,7 +7,7 @@ use ratatui::{
 };
 
 use crate::{
-    event::{Event, EventState},
+    event::{Event, EventState, KeyboardEvent},
     html_render::render,
 };
 
@@ -53,20 +52,17 @@ impl Content {
 
     pub fn handle_event(&mut self, event: &Event) -> EventState {
         match event {
-            Event::Keyboard(key_event) => self.handle_keyboard_event(key_event.code),
+            Event::Keyboard(key_event) => self.handle_keyboard_event(*key_event),
             Event::Tick => match self.state {
                 ContentState::Loading(tick) => {
                     self.state = ContentState::Loading(tick.wrapping_add(1));
-                    EventState::NotConsumed
+                    EventState::Handled
                 }
-                _ => EventState::NotConsumed,
+                _ => EventState::Ignored,
             },
             Event::StartLoadingItem => {
                 self.state = ContentState::Loading(0);
-
-                // Do not consume this event, so that the parent can transition
-                // the focused state.
-                EventState::NotConsumed
+                EventState::Handled
             }
             Event::LoadedItem(text) => {
                 self.state = ContentState::Data(ContentStateData {
@@ -75,22 +71,20 @@ impl Content {
                     render_cache: None,
                 });
 
-                EventState::Consumed
+                EventState::Handled
             }
-            Event::ToastLoading(_) | Event::ToastError(_) | Event::ToastHide => {
-                EventState::NotConsumed
-            }
+            Event::Toast(_) => EventState::Ignored,
         }
     }
 
-    fn handle_keyboard_event(&mut self, key: KeyCode) -> EventState {
+    fn handle_keyboard_event(&mut self, event: KeyboardEvent) -> EventState {
         if !self.focused {
-            return EventState::NotConsumed;
+            return EventState::Ignored;
         }
 
         match &mut self.state {
-            ContentState::Data(data) => data.handle_keyboard_event(key),
-            _ => EventState::NotConsumed,
+            ContentState::Data(data) => data.handle_keyboard_event(event),
+            _ => EventState::Ignored,
         }
     }
 
@@ -136,23 +130,23 @@ fn basic_block(selected: bool) -> Block<'static> {
 }
 
 impl ContentStateData {
-    fn handle_keyboard_event(&mut self, key: KeyCode) -> EventState {
+    fn handle_keyboard_event(&mut self, key: KeyboardEvent) -> EventState {
         match key {
-            KeyCode::Up | KeyCode::Char('k') => {
+            KeyboardEvent::Up => {
                 self.scroll_offset = self.scroll_offset.saturating_sub(1);
 
-                EventState::Consumed
+                EventState::Handled
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            KeyboardEvent::Down => {
                 let nr_lines = self.render_cache.as_ref().map(|c| c.lines.len());
                 if let Some(nr_lines) = nr_lines {
                     self.scroll_offset += 1;
                     self.scroll_offset = self.scroll_offset.min(nr_lines.saturating_sub(5));
                 }
 
-                EventState::Consumed
+                EventState::Handled
             }
-            _ => EventState::NotConsumed,
+            _ => EventState::Ignored,
         }
     }
 

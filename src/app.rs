@@ -1,4 +1,3 @@
-use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
@@ -7,7 +6,7 @@ use ratatui::{
 use crate::{
     components::{Content, Help, ItemList, Toast},
     data::DataLoader,
-    event::{Event, EventSender, EventState},
+    event::{Event, EventSender, EventState, KeyboardEvent},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -60,68 +59,61 @@ impl App {
 
     pub fn handle_event(&mut self, event: &Event) -> EventState {
         // Component events
-        let state = self.item_list.handle_event(event);
-        if state.is_consumed() {
-            return EventState::Consumed;
-        }
+        let mut res_state = self.item_list.handle_event(event);
 
         let state = self.content.handle_event(event);
-        if state.is_consumed() {
-            return EventState::Consumed;
-        }
+        res_state = res_state.or(&state);
 
         let state = self.toast.handle_event(event);
-        if state.is_consumed() {
-            return EventState::Consumed;
-        }
+        res_state = res_state.or(&state);
 
         // Move focus
-        match event {
-            Event::Keyboard(key) => match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => match self.focus {
-                    Focus::ItemList => EventState::NotConsumed,
+        let state = match event {
+            Event::Keyboard(key) => match key {
+                KeyboardEvent::Back => match self.focus {
+                    Focus::ItemList => EventState::Ignored,
                     Focus::Content => {
                         self.set_focus(Focus::ItemList);
-                        EventState::Consumed
+                        EventState::Handled
                     }
                     Focus::Help => {
                         self.set_focus(self.prev_focus.unwrap_or(Focus::ItemList));
-                        EventState::Consumed
+                        EventState::Handled
                     }
                 },
-                KeyCode::Char('h') | KeyCode::Left => match self.focus {
+                KeyboardEvent::Left => match self.focus {
                     Focus::Content => {
                         self.set_focus(Focus::ItemList);
-                        EventState::Consumed
+                        EventState::Handled
                     }
-                    Focus::ItemList | Focus::Help => EventState::NotConsumed,
+                    Focus::ItemList | Focus::Help => EventState::Ignored,
                 },
-                KeyCode::Char('l') | KeyCode::Right => match self.focus {
+                KeyboardEvent::Right => match self.focus {
                     Focus::ItemList => {
                         self.set_focus(Focus::Content);
-                        EventState::Consumed
+                        EventState::Handled
                     }
-                    Focus::Content | Focus::Help => EventState::NotConsumed,
+                    Focus::Content | Focus::Help => EventState::Ignored,
                 },
-                KeyCode::Char('?') => {
+                KeyboardEvent::Help => {
                     self.set_focus(Focus::Help);
-                    EventState::Consumed
+                    EventState::Handled
                 }
-                _ => EventState::NotConsumed,
+                _ => EventState::Ignored,
             },
             Event::StartLoadingItem => match self.focus {
                 Focus::ItemList => {
                     self.set_focus(Focus::Content);
-                    EventState::Consumed
+                    EventState::Handled
                 }
-                Focus::Content | Focus::Help => EventState::NotConsumed,
+                Focus::Content | Focus::Help => EventState::Ignored,
             },
-            Event::Tick => EventState::NotConsumed,
-            Event::LoadedItem(_) => EventState::NotConsumed,
-            Event::ToastLoading(_) | Event::ToastError(_) | Event::ToastHide => {
-                EventState::NotConsumed
-            }
-        }
+            Event::Tick => EventState::Ignored,
+            Event::LoadedItem(_) => EventState::Ignored,
+            Event::Toast(_) => EventState::Ignored,
+        };
+
+        res_state.or(&state)
     }
 
     fn set_focus(&mut self, focus: Focus) {

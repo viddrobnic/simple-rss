@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, BorderType, Clear, Paragraph},
 };
 
-use crate::event::{Event, EventState, TICK_FPS};
+use crate::event::{Event, EventState, TICK_FPS, ToastEvent};
 
 use super::spinner_frame;
 
@@ -30,43 +30,43 @@ impl Toast {
 
     pub fn handle_event(&mut self, event: &Event) -> EventState {
         match event {
-            Event::ToastLoading(msg) => {
+            Event::Toast(ToastEvent::Loading(msg)) => {
                 *self = Toast::Loading {
                     message: msg.to_string(),
                     ticks: 0,
                 };
-                EventState::Consumed
+                EventState::Handled
             }
-            Event::ToastError(msg) => {
+            Event::Toast(ToastEvent::Error(msg)) => {
                 *self = Toast::Error {
                     error: msg.to_string(),
                     ticks: 0,
                 };
-                EventState::Consumed
+                EventState::Handled
             }
-            Event::ToastHide => {
+            Event::Toast(ToastEvent::Hide) => {
                 *self = Toast::Hidden;
-                EventState::Consumed
+                EventState::Handled
             }
             Event::Tick => match self {
                 Toast::Error { ticks, .. } => {
                     if *ticks > TICK_FPS as u32 * 5 {
                         *self = Toast::Hidden;
-                        EventState::Consumed
                     } else {
                         *ticks += 1;
-                        EventState::Consumed
                     }
+
+                    EventState::Handled
                 }
                 Toast::Loading { ticks, .. } => {
                     *ticks += 1;
-                    EventState::Consumed
+                    EventState::Handled
                 }
-                Toast::Hidden => EventState::NotConsumed,
+                Toast::Hidden => EventState::Ignored,
             },
-            Event::Keyboard(_) => EventState::NotConsumed,
-            Event::StartLoadingItem => EventState::NotConsumed,
-            Event::LoadedItem(_) => EventState::NotConsumed,
+            Event::Keyboard(_) => EventState::Ignored,
+            Event::StartLoadingItem => EventState::Ignored,
+            Event::LoadedItem(_) => EventState::Ignored,
         }
     }
 

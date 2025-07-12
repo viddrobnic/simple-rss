@@ -6,7 +6,7 @@ use std::{
 use chrono::FixedOffset;
 use futures::future::join_all;
 
-use crate::event::{Event, EventSender};
+use crate::event::{Event, EventSender, ToastEvent};
 
 use super::{Channel, Data, Item};
 
@@ -60,7 +60,7 @@ impl DataLoader {
 
     pub async fn refresh(&mut self) {
         self.sender
-            .send(Event::ToastLoading("Refreshing".to_string()));
+            .send(Event::Toast(ToastEvent::Loading("Refreshing".to_string())));
 
         // This syntax is used as workaround for clippy - making sure that lock is dropped before
         // await
@@ -98,10 +98,11 @@ impl DataLoader {
             lock.items = items;
             lock.version += 1;
 
-            self.sender.send(Event::ToastHide);
+            self.sender.send(Event::Toast(ToastEvent::Hide));
         } else {
-            self.sender
-                .send(Event::ToastError("Failed to refresh data!".to_string()));
+            self.sender.send(Event::Toast(ToastEvent::Error(
+                "Failed to refresh data!".to_string(),
+            )));
         }
     }
 }

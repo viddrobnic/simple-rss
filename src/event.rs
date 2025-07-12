@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crossterm::event::{Event as CrosstermEvent, KeyEvent};
+use crossterm::event::{Event as CrosstermEvent, KeyCode};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
@@ -9,14 +9,55 @@ pub const TICK_FPS: f64 = 30.0;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
     Tick,
-    Keyboard(KeyEvent),
+    Keyboard(KeyboardEvent),
 
     StartLoadingItem,
     LoadedItem(String),
 
-    ToastLoading(String),
-    ToastError(String),
-    ToastHide,
+    Toast(ToastEvent),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Copy)]
+pub enum KeyboardEvent {
+    Left,
+    Right,
+    Up,
+    Down,
+    Back,
+    Enter,
+    Space,
+    Open,
+    Help,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ToastEvent {
+    Loading(String),
+    Error(String),
+    Hide,
+}
+
+/// State of weather event has been handled.
+/// If event is handled, it's still sent to other components.
+/// It's mostly used to decide when to render the components
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum EventState {
+    Handled,
+    Ignored,
+}
+
+impl EventState {
+    pub fn is_handled(&self) -> bool {
+        *self == Self::Handled
+    }
+
+    pub fn or(&self, other: &Self) -> Self {
+        if self.is_handled() || other.is_handled() {
+            Self::Handled
+        } else {
+            Self::Ignored
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -26,12 +67,6 @@ pub struct EventSender(mpsc::UnboundedSender<Event>);
 pub struct EventHandler {
     sender: EventSender,
     receiver: mpsc::UnboundedReceiver<Event>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum EventState {
-    Consumed,
-    NotConsumed,
 }
 
 impl EventSender {
@@ -44,18 +79,14 @@ impl EventSender {
     }
 }
 
-impl EventState {
-    pub fn is_consumed(&self) -> bool {
-        *self == Self::Consumed
-    }
-}
-
 impl EventHandler {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
         let sender = EventSender(sender);
+
         let actor = EventTask::new(sender.clone());
         tokio::spawn(async { actor.run().await });
+
         Self { sender, receiver }
     }
 
@@ -97,11 +128,28 @@ impl EventTask {
               }
               Some(Ok(evt)) = crossterm_event => {
                 if let CrosstermEvent::Key(key_evt) = evt {
-                    self.sender.send(Event::Keyboard(key_evt));
+                    send_keycode(key_evt.code, &self.sender);
                 }
               }
             };
         }
         Ok(())
     }
+}
+
+fn send_keycode(code: KeyCode, sender: &EventSender) {
+    let event = match code {
+        KeyCode::Left | KeyCode::Char('h') => KeyboardEvent::Left,
+        KeyCode::Right | KeyCode::Char('l') => KeyboardEvent::Right,
+        KeyCode::Up | KeyCode::Char('k') => KeyboardEvent::Up,
+        KeyCode::Down | KeyCode::Char('j') => KeyboardEvent::Down,
+        KeyCode::Esc | KeyCode::Char('q') => KeyboardEvent::Back,
+        KeyCode::Enter => KeyboardEvent::Enter,
+        KeyCode::Char(' ') => KeyboardEvent::Space,
+        KeyCode::Char('o') => KeyboardEvent::Open,
+        KeyCode::Char('?') => KeyboardEvent::Help,
+        _ => return,
+    };
+
+    sender.send(Event::Keyboard(event));
 }

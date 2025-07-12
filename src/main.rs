@@ -1,9 +1,8 @@
 use app::App;
 use clap::{Parser, Subcommand};
 use colored::{ColoredString, Colorize};
-use crossterm::event::KeyCode;
 use data::{Channel, Data, DataLoader};
-use event::{Event, EventHandler};
+use event::{Event, EventHandler, KeyboardEvent};
 use unicode_width::UnicodeWidthStr;
 
 mod app;
@@ -94,19 +93,15 @@ async fn run() -> anyhow::Result<()> {
     let mut app = App::new(events.get_sender(), data_loader.clone())?;
 
     loop {
-        terminal.draw(|f| app.draw(f))?;
-
         let event = events.next().await?;
         let state = app.handle_event(&event);
-        if state.is_consumed() {
+
+        if state.is_handled() {
+            terminal.draw(|f| app.draw(f))?;
             continue;
         }
 
-        let Event::Keyboard(key) = event else {
-            continue;
-        };
-
-        if key.code == KeyCode::Char('q') || key.code == KeyCode::Esc {
+        if event == Event::Keyboard(KeyboardEvent::Back) {
             data_loader.save()?;
             break;
         }

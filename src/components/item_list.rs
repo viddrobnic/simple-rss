@@ -1,4 +1,3 @@
-use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -13,7 +12,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     data::{DataLoader, Item},
-    event::{Event, EventSender, EventState},
+    event::{Event, EventSender, EventState, KeyboardEvent},
 };
 
 pub struct ItemList {
@@ -50,14 +49,14 @@ impl ItemList {
 
     pub fn handle_event(&mut self, event: &Event) -> EventState {
         match event {
-            Event::Keyboard(key_event) => self.handle_keyboard_event(key_event.code),
-            _ => EventState::NotConsumed,
+            Event::Keyboard(key_event) => self.handle_keyboard_event(*key_event),
+            _ => EventState::Ignored,
         }
     }
 
-    fn handle_keyboard_event(&mut self, key: KeyCode) -> EventState {
+    fn handle_keyboard_event(&mut self, event: KeyboardEvent) -> EventState {
         //  Handle open browser separately, because it's independent of focus.
-        if key == KeyCode::Char('o') {
+        if event == KeyboardEvent::Open {
             if let Some(selected) = self.list_state.selected() {
                 let data = self.data_loader.get_data();
 
@@ -69,23 +68,23 @@ impl ItemList {
                 self.data_loader.set_read(selected, true);
             }
 
-            return EventState::Consumed;
+            return EventState::Handled;
         }
 
         if !self.focused {
-            return EventState::NotConsumed;
+            return EventState::Ignored;
         }
 
-        match key {
-            KeyCode::Up | KeyCode::Char('k') => {
+        match event {
+            KeyboardEvent::Up => {
                 self.list_state.select_previous();
-                EventState::Consumed
+                EventState::Handled
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            KeyboardEvent::Down => {
                 self.list_state.select_next();
-                EventState::Consumed
+                EventState::Handled
             }
-            KeyCode::Enter => {
+            KeyboardEvent::Enter => {
                 if let Some(selected) = self.list_state.selected() {
                     let data = self.data_loader.get_data();
 
@@ -102,9 +101,9 @@ impl ItemList {
                     self.data_loader.set_read(selected, true);
                 }
 
-                EventState::Consumed
+                EventState::Handled
             }
-            KeyCode::Char(' ') => {
+            KeyboardEvent::Space => {
                 if let Some(selected) = self.list_state.selected() {
                     let data = self.data_loader.get_data();
                     let new_read = !data.items[selected].read;
@@ -113,9 +112,9 @@ impl ItemList {
                     self.data_loader.set_read(selected, new_read);
                 }
 
-                EventState::Consumed
+                EventState::Handled
             }
-            _ => EventState::NotConsumed,
+            _ => EventState::Ignored,
         }
     }
 
