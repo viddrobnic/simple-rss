@@ -1942,19 +1942,15 @@ dependencies = [
  "clap",
  "colored",
  "crossterm 0.29.0",
- "ego-tree",
  "feed-rs",
  "futures",
  "ratatui",
  "reqwest",
- "scraper",
  "serde",
  "serde_json",
  "simple_rss_lib",
- "textwrap",
  "tokio",
  "unicode-width 0.2.0",
- "webbrowser",
 ]
 
 [[package]]
