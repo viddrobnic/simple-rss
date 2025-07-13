@@ -2,7 +2,6 @@ use std::env;
 use std::path::PathBuf;
 
 fn home_dir() -> PathBuf {
-    #[allow(deprecated)] // This function is fixed and will be un-deprecated soon.
     env::home_dir().expect("Home dir not found")
 }
 

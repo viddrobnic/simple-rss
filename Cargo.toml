@@ -1,3 +1,6 @@
+[workspace]
+members = ["simple_rss_lib"]
+
 [package]
 name = "simple-rss"
 version = "0.1.0"
@@ -21,3 +24,4 @@ scraper = "0.23"
 unicode-width = "0.2"
 clap = { version = "4.5", features = ["derive"] }
 colored = "3"
+simple_rss_lib = { path = "./simple_rss_lib" }

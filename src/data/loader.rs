@@ -1,51 +1,41 @@
 use std::{
     collections::HashSet,
-    sync::{Arc, RwLock, RwLockReadGuard},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use chrono::FixedOffset;
 use futures::future::join_all;
+use simple_rss_lib::data::{Loader, RefreshStatus};
 
-use crate::event::{Event, EventSender, ToastEvent};
-
-use super::{Channel, Data, Item};
+use super::{Channel, Data, Item, load_data};
 
 #[derive(Clone)]
 pub struct DataLoader {
-    sender: EventSender,
-
-    data: Arc<RwLock<Data>>,
+    version: Arc<Mutex<u16>>,
+    data: Arc<Mutex<Data>>,
 }
 
-impl DataLoader {
-    pub fn new(sender: EventSender) -> anyhow::Result<Self> {
-        let data = Data::load()?;
-
-        Ok(Self {
-            sender,
-            data: Arc::new(RwLock::new(data)),
-        })
+impl Loader for DataLoader {
+    fn get_data(&self) -> MutexGuard<Data> {
+        self.data.lock().unwrap()
     }
 
-    pub fn get_data(&self) -> RwLockReadGuard<Data> {
-        self.data.read().unwrap()
-    }
-
-    pub fn save(&self) -> anyhow::Result<()> {
-        let lock = self.data.read().unwrap();
-        lock.save()
+    fn get_version(&self) -> u16 {
+        *self.version.lock().unwrap()
     }
 
     /// Set item at given index to read.
-    pub fn set_read(&mut self, index: usize, read: bool) {
-        let mut lock = self.data.write().unwrap();
+    fn set_read(&mut self, index: usize, read: bool) {
+        let mut lock = self.data.lock().unwrap();
         lock.items[index].read = read;
-        lock.version += 1;
+
+        let mut version = self.version.lock().unwrap();
+        *version += 1;
     }
 
-    pub async fn load_item(&self, url: &str) {
+    async fn load_item(url: &str) -> String {
         let resp = reqwest::get(url).await;
-        let text = match resp {
+        match resp {
             Err(err) => {
                 format!("Failed loading item: {}", err)
             }
@@ -53,19 +43,14 @@ impl DataLoader {
                 Ok(data) => data,
                 Err(err) => format!("Failed loading item: {}", err),
             },
-        };
-
-        self.sender.send(Event::LoadedItem(text));
+        }
     }
 
-    pub async fn refresh(&mut self) {
-        self.sender
-            .send(Event::Toast(ToastEvent::Loading("Refreshing".to_string())));
-
+    async fn refresh(&mut self) -> RefreshStatus {
         // This syntax is used as workaround for clippy - making sure that lock is dropped before
         // await
         let channels = {
-            let lock = self.data.read().unwrap();
+            let lock = self.data.lock().unwrap();
             lock.channels.clone()
         };
 
@@ -83,7 +68,7 @@ impl DataLoader {
         if errors.is_empty() {
             items.sort_by(|a, b| b.pub_date.cmp(&a.pub_date));
 
-            let mut lock = self.data.write().unwrap();
+            let mut lock = self.data.lock().unwrap();
             let mut read_items = HashSet::new();
             for it in &lock.items {
                 if it.read {
@@ -96,14 +81,25 @@ impl DataLoader {
             }
 
             lock.items = items;
-            lock.version += 1;
 
-            self.sender.send(Event::Toast(ToastEvent::Hide));
+            let mut version = self.version.lock().unwrap();
+            *version += 1;
+
+            RefreshStatus::Ok
         } else {
-            self.sender.send(Event::Toast(ToastEvent::Error(
-                "Failed to refresh data!".to_string(),
-            )));
+            RefreshStatus::Error
         }
+    }
+}
+
+impl DataLoader {
+    pub fn new() -> anyhow::Result<Self> {
+        let data = load_data()?;
+
+        Ok(Self {
+            data: Arc::new(Mutex::new(data)),
+            version: Arc::new(Mutex::new(0)),
+        })
     }
 }
 

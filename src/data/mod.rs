@@ -1,56 +1,24 @@
 use std::{fs, io, path::Path};
 
-use chrono::{DateTime, FixedOffset};
-use serde::{Deserialize, Serialize};
-
-use crate::path::{config_path, data_dir};
-
 mod loader;
+mod path;
 
 pub use loader::DataLoader;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Item {
-    pub id: String,
-    pub channel_name: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub pub_date: Option<DateTime<FixedOffset>>,
-    pub link: String,
+use path::{config_path, data_dir};
+use simple_rss_lib::data::{Channel, Data, Item};
 
-    pub read: bool,
+pub fn load_data() -> io::Result<Data> {
+    let items = load_items()?;
+    let channels = load_channels()?;
+
+    Ok(Data { items, channels })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Channel {
-    pub name: Option<String>,
-    pub url: String,
-}
-
-#[derive(Default)]
-pub struct Data {
-    pub channels: Vec<Channel>,
-    pub items: Vec<Item>,
-    pub version: u16,
-}
-
-impl Data {
-    pub fn load() -> anyhow::Result<Self> {
-        let items = load_items()?;
-        let channels = load_channels()?;
-
-        Ok(Self {
-            items,
-            channels,
-            version: 0,
-        })
-    }
-
-    pub fn save(&self) -> anyhow::Result<()> {
-        save_items(&self.items)?;
-        save_channels(&self.channels)?;
-        Ok(())
-    }
+pub fn save_data(data: &Data) -> io::Result<()> {
+    save_items(&data.items)?;
+    save_channels(&data.channels)?;
+    Ok(())
 }
 
 /// Creates all the directories that are needed to have a file at path.

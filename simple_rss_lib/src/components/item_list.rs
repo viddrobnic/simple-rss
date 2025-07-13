@@ -11,17 +11,17 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    data::{DataLoader, Item},
+    data::{Item, Loader},
     event::{Event, EventSender, EventState, KeyboardEvent},
 };
 
-pub struct ItemList {
+pub struct ItemList<L: Loader> {
     focused: bool,
 
     list_state: ListState,
 
     event_tx: EventSender,
-    data_loader: DataLoader,
+    data_loader: L,
 
     render_cache: Option<RenderCache>,
 }
@@ -32,8 +32,8 @@ struct RenderCache {
     version: u16,
 }
 
-impl ItemList {
-    pub fn new(focused: bool, event_tx: EventSender, data_loader: DataLoader) -> Self {
+impl<L: Loader> ItemList<L> {
+    pub fn new(focused: bool, event_tx: EventSender, data_loader: L) -> Self {
         Self {
             focused,
             list_state: ListState::default(),
@@ -90,10 +90,12 @@ impl ItemList {
 
                     // Start loading item
                     let url = data.items[selected].link.clone();
-                    let loader = self.data_loader.clone();
+                    let sender = self.event_tx.clone();
                     tokio::spawn(async move {
-                        loader.load_item(&url).await;
+                        let text = L::load_item(&url).await;
+                        sender.send(Event::LoadedItem(text));
                     });
+
                     self.event_tx.send(Event::StartLoadingItem);
 
                     // Set to read
@@ -178,7 +180,7 @@ impl ItemList {
         self.render_cache = Some(RenderCache {
             list,
             width: area.width,
-            version: data.version,
+            version: self.data_loader.get_version(),
         });
 
         self.render_cache.as_ref().unwrap()
@@ -189,10 +191,7 @@ impl ItemList {
             return self.recalculate_render_cache(area);
         };
 
-        let version = {
-            let data = self.data_loader.get_data();
-            data.version
-        };
+        let version = self.data_loader.get_version();
 
         if render_cache.width != area.width || render_cache.version != version {
             return self.recalculate_render_cache(area);

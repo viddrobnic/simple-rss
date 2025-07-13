@@ -1,17 +1,16 @@
-use app::App;
 use clap::{Parser, Subcommand};
 use colored::{ColoredString, Colorize};
-use data::{Channel, Data, DataLoader};
-use event::{Event, EventHandler, KeyboardEvent};
+use data::{DataLoader, load_data, save_data};
+use event::{EventTask, TICK_FPS};
+use simple_rss_lib::{
+    app::App,
+    data::{Channel, Loader},
+    event::{Event, EventBus, KeyboardEvent},
+};
 use unicode_width::UnicodeWidthStr;
 
-mod app;
-mod components;
 mod data;
 mod event;
-mod html_render;
-mod path;
-mod state;
 
 const NAME_TITLE: &str = "Name";
 const URL_TITLE: &str = "URL";
@@ -88,12 +87,19 @@ async fn main() -> anyhow::Result<()> {
 async fn run() -> anyhow::Result<()> {
     let mut terminal = ratatui::init();
 
-    let mut events = EventHandler::new();
-    let data_loader = DataLoader::new(events.get_sender())?;
-    let mut app = App::new(events.get_sender(), data_loader.clone())?;
+    let mut event_bus = EventBus::new();
+    let event_task = EventTask::new(event_bus.get_sender());
+    tokio::spawn(async move { event_task.run().await });
+
+    let data_loader = DataLoader::new()?;
+    let mut app = App::new(event_bus.get_sender(), data_loader.clone(), TICK_FPS as u32);
 
     loop {
-        let event = events.next().await?;
+        let event = event_bus.next().await;
+        let Some(event) = event else {
+            break;
+        };
+
         let state = app.handle_event(&event);
 
         if state.is_handled() {
@@ -102,7 +108,8 @@ async fn run() -> anyhow::Result<()> {
         }
 
         if event == Event::Keyboard(KeyboardEvent::Back) {
-            data_loader.save()?;
+            let data = data_loader.get_data();
+            save_data(&data)?;
             break;
         }
     }
@@ -121,9 +128,9 @@ fn manage_channel(cmd: ChannelCommands) -> anyhow::Result<()> {
 }
 
 fn add_channel(channel: Channel) -> anyhow::Result<()> {
-    let mut data = Data::load()?;
+    let mut data = load_data()?;
     data.channels.push(channel);
-    data.save()?;
+    save_data(&data)?;
 
     println!("✅ {}", "Channel added!".green().bold());
 
@@ -131,14 +138,14 @@ fn add_channel(channel: Channel) -> anyhow::Result<()> {
 }
 
 fn remove_channel(idx: usize) -> anyhow::Result<()> {
-    let mut data = Data::load()?;
+    let mut data = load_data()?;
     if idx >= data.channels.len() {
         println!("{}", "Invalid index!".yellow().bold());
         return Ok(());
     }
 
     data.channels.remove(idx);
-    data.save()?;
+    save_data(&data)?;
 
     println!("✅ {}", "Channel removed!".green().bold());
     Ok(())
@@ -150,7 +157,7 @@ fn edit_channel(idx: usize, name: Option<String>, url: Option<String>) -> anyhow
         return Ok(());
     }
 
-    let mut data = Data::load()?;
+    let mut data = load_data()?;
     if idx >= data.channels.len() {
         println!("{}", "Invalid index!".yellow().bold());
         return Ok(());
@@ -162,7 +169,7 @@ fn edit_channel(idx: usize, name: Option<String>, url: Option<String>) -> anyhow
     if let Some(url) = url {
         data.channels[idx].url = url;
     }
-    data.save()?;
+    save_data(&data)?;
 
     println!("✅ {}", "Channel updated!".green().bold());
 
@@ -170,7 +177,7 @@ fn edit_channel(idx: usize, name: Option<String>, url: Option<String>) -> anyhow
 }
 
 fn list_channels() -> anyhow::Result<()> {
-    let data = Data::load()?;
+    let data = load_data()?;
     if data.channels.is_empty() {
         println!(
             "No channels added!\nRun `{}` to add a channel.",

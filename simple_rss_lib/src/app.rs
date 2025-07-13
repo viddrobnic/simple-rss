@@ -3,11 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
 };
 
-use crate::{
-    components::{Content, Help, ItemList, Toast},
-    data::DataLoader,
-    event::{Event, EventSender, EventState, KeyboardEvent},
-};
+use crate::{components::*, data::Loader, event::*};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Focus {
@@ -16,32 +12,42 @@ enum Focus {
     Help,
 }
 
-pub struct App {
+pub struct App<L: Loader> {
     focus: Focus,
 
     // Focus before help is opened
     prev_focus: Option<Focus>,
 
-    item_list: ItemList,
+    item_list: ItemList<L>,
     content: Content,
     toast: Toast,
     help: Help,
 }
 
-impl App {
-    pub fn new(event_sender: EventSender, data_loader: DataLoader) -> anyhow::Result<Self> {
+impl<L: Loader + Clone + Send + 'static> App<L> {
+    pub fn new(event_sender: EventSender, data_loader: L, tick_fps: u32) -> Self {
         // Start refreshing
         let mut loader = data_loader.clone();
-        tokio::spawn(async move { loader.refresh().await });
+        let sender = event_sender.clone();
+        tokio::spawn(async move {
+            sender.send(Event::Toast(ToastEvent::Loading("Refreshing".to_string())));
+            let status = loader.refresh().await;
+            match status {
+                crate::data::RefreshStatus::Ok => sender.send(Event::Toast(ToastEvent::Hide)),
+                crate::data::RefreshStatus::Error => sender.send(Event::Toast(ToastEvent::Error(
+                    "Failed to refresh data!".to_string(),
+                ))),
+            };
+        });
 
-        Ok(Self {
+        Self {
             focus: Focus::ItemList,
             prev_focus: None,
             item_list: ItemList::new(true, event_sender, data_loader.clone()),
             content: Content::new(false),
-            toast: Toast::new(),
+            toast: Toast::new(tick_fps),
             help: Help::new(),
-        })
+        }
     }
 
     pub fn draw(&mut self, frame: &mut Frame) {

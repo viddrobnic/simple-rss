@@ -1950,6 +1950,22 @@ dependencies = [
  "scraper",
  "serde",
  "serde_json",
+ "simple_rss_lib",
+ "textwrap",
+ "tokio",
+ "unicode-width 0.2.0",
+ "webbrowser",
+]
+
+[[package]]
+name = "simple_rss_lib"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "ego-tree",
+ "ratatui",
+ "scraper",
+ "serde",
  "textwrap",
  "tokio",
  "unicode-width 0.2.0",
