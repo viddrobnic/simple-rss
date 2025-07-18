@@ -15,7 +15,15 @@ use crate::{
     event::{Event, EventSender, EventState, KeyboardEvent},
 };
 
+pub struct Config {
+    pub custom_empty_list_msg: Option<Paragraph<'static>>,
+    pub disable_read_status: bool,
+    pub disable_channel_names: bool,
+}
+
 pub struct ItemList<L: Loader> {
+    config: Config,
+
     focused: bool,
 
     list_state: ListState,
@@ -24,6 +32,8 @@ pub struct ItemList<L: Loader> {
     data_loader: L,
 
     render_cache: Option<RenderCache>,
+
+    empty_list_message: Paragraph<'static>,
 }
 
 struct RenderCache {
@@ -33,13 +43,23 @@ struct RenderCache {
 }
 
 impl<L: Loader> ItemList<L> {
-    pub fn new(focused: bool, event_tx: EventSender, data_loader: L) -> Self {
+    pub fn new(focused: bool, event_tx: EventSender, data_loader: L, config: Config) -> Self {
+        let empty_list_message = config.custom_empty_list_msg.clone().unwrap_or_else(|| {
+            Paragraph::new(vec![
+                Line::from("Add channels to get started").bold(),
+                Line::from(vec!["See ".into(), "simple-rss help".fg(Color::DarkGray)]),
+            ])
+            .centered()
+        });
+
         Self {
+            config,
             focused,
             list_state: ListState::default(),
             event_tx,
             data_loader,
             render_cache: None,
+            empty_list_message,
         }
     }
 
@@ -64,8 +84,10 @@ impl<L: Loader> ItemList<L> {
                 let _ = webbrowser::open(url);
 
                 // Set to read
-                drop(data); // Drop lock to avoid race condition
-                self.data_loader.set_read(selected, true);
+                if !self.config.disable_read_status {
+                    drop(data); // Drop lock to avoid race condition
+                    self.data_loader.set_read(selected, true);
+                }
             }
 
             return EventState::Handled;
@@ -99,8 +121,10 @@ impl<L: Loader> ItemList<L> {
                     self.event_tx.send(Event::StartLoadingItem);
 
                     // Set to read
-                    drop(data); // Drop lock to avoid race condition
-                    self.data_loader.set_read(selected, true);
+                    if !self.config.disable_read_status {
+                        drop(data); // Drop lock to avoid race condition
+                        self.data_loader.set_read(selected, true);
+                    }
                 }
 
                 EventState::Handled
@@ -110,8 +134,10 @@ impl<L: Loader> ItemList<L> {
                     let data = self.data_loader.get_data();
                     let new_read = !data.items[selected].read;
 
-                    drop(data); // Drop to avoid race condition
-                    self.data_loader.set_read(selected, new_read);
+                    if !self.config.disable_read_status {
+                        drop(data); // Drop to avoid race condition
+                        self.data_loader.set_read(selected, new_read);
+                    }
                 }
 
                 EventState::Handled
@@ -158,14 +184,8 @@ impl<L: Loader> ItemList<L> {
     }
 
     fn draw_empty(&self, frame: &mut Frame, mut area: Rect) {
-        let paragraph = Paragraph::new(vec![
-            Line::from("Add channels to get started").bold(),
-            Line::from(vec!["See ".into(), "simple-rss help".fg(Color::DarkGray)]),
-        ])
-        .centered();
-
         area.y = area.height / 2;
-        frame.render_widget(paragraph, area);
+        frame.render_widget(&self.empty_list_message, area);
     }
 
     fn recalculate_render_cache(&mut self, area: Rect) -> &RenderCache {
@@ -173,7 +193,7 @@ impl<L: Loader> ItemList<L> {
         let list = List::new(
             data.items
                 .iter()
-                .map(|it| item_to_list_item(it, area.width as usize)),
+                .map(|it| item_to_list_item(it, area.width as usize, &self.config)),
         )
         .highlight_style(Style::default().bg(Color::DarkGray));
 
@@ -201,15 +221,17 @@ impl<L: Loader> ItemList<L> {
     }
 }
 
-fn item_to_list_item(it: &Item, width: usize) -> ListItem<'static> {
+fn item_to_list_item(it: &Item, width: usize, config: &Config) -> ListItem<'static> {
     // Title
-    let mut opts = textwrap::Options::new(width - 1)
-        .subsequent_indent("    ")
-        .break_words(true);
-    if it.read {
-        opts = opts.initial_indent("[X] ")
-    } else {
-        opts = opts.initial_indent("[ ] ")
+    let mut opts = textwrap::Options::new(width - 1).break_words(true);
+    if !config.disable_read_status {
+        opts = opts.subsequent_indent("    ");
+
+        if it.read {
+            opts = opts.initial_indent("[X] ")
+        } else {
+            opts = opts.initial_indent("[ ] ")
+        }
     }
 
     let mut text = Text::default();
@@ -221,19 +243,21 @@ fn item_to_list_item(it: &Item, width: usize) -> ListItem<'static> {
             .map(|s| Line::from(s.to_string()).bold().fg(Color::LightGreen)),
     );
 
-    let opts = textwrap::Options::new(width - 2)
-        .initial_indent("    ")
-        .subsequent_indent("    ")
-        .break_words(true);
+    let mut opts = textwrap::Options::new(width - 2).break_words(true);
+    if !config.disable_read_status {
+        opts = opts.initial_indent("    ").subsequent_indent("    ");
+    }
 
     // Channel name
     let Some(date) = &it.pub_date else {
-        let channel = textwrap::wrap(&it.channel_name, &opts);
-        text.extend(
-            channel
-                .iter()
-                .map(|s| Line::from(s.to_string()).bold().fg(Color::Gray)),
-        );
+        if !config.disable_channel_names {
+            let channel = textwrap::wrap(&it.channel_name, &opts);
+            text.extend(
+                channel
+                    .iter()
+                    .map(|s| Line::from(s.to_string()).bold().fg(Color::Gray)),
+            );
+        }
 
         text.push_line("");
         return ListItem::from(text);
@@ -241,13 +265,33 @@ fn item_to_list_item(it: &Item, width: usize) -> ListItem<'static> {
 
     let pub_time = format!("{}", date.format("%Y-%m-%d"));
 
+    if config.disable_channel_names {
+        let line = if config.disable_read_status {
+            Line::from(pub_time)
+        } else {
+            Line::from(format!("    {pub_time}"))
+        };
+        text.push_line(line.fg(Color::Gray).bold());
+
+        text.push_line("");
+        return ListItem::from(text);
+    }
+
     // 4 spaces at the beginning
-    let total_width = it.channel_name.width() + pub_time.width() + 4;
+    let mut total_width = it.channel_name.width() + pub_time.width();
+    if !config.disable_read_status {
+        total_width += 4;
+    }
 
     // Everything can fit on one line, we can do the nice formatting.
     if total_width < width - 3 {
         // 3 = Some buffer to have space around things
-        let mut line = Line::from("    ");
+        let mut line = if config.disable_read_status {
+            Line::default()
+        } else {
+            Line::from("    ")
+        };
+
         line.push_span(Span::from(it.channel_name.clone()).bold().fg(Color::Gray));
 
         let space = width - total_width - 1;

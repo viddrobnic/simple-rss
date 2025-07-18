@@ -18,29 +18,12 @@ pub struct Help {
 }
 
 impl Help {
-    pub fn new() -> Self {
+    pub fn new(disable_read_status: bool) -> Self {
+        let (keys, descs) = build_paragraph(disable_read_status);
         Self {
             open: false,
-            keys: Paragraph::new(vec![
-                "<Enter>".into(),
-                "<Esc> / <q>".into(),
-                "<o>".into(),
-                "<Space>".into(),
-                "<Up> / <Down> / <j> / <k>".into(),
-                "<Left> / <Right> / <h> / <l>".into(),
-            ])
-            .centered()
-            .blue()
-            .bold(),
-            descs: Paragraph::new(vec![
-                "Select".into(),
-                "Go Back / Exit".into(),
-                "Open in browser".into(),
-                "Mark/Unmark item in list as read".into(),
-                "Scroll up / down".into(),
-                "Change focus between item list and content".into(),
-            ]),
-
+            keys,
+            descs,
             keys_width: 28,
             descs_width: 42,
         }
@@ -102,4 +85,32 @@ impl Help {
             ),
         );
     }
+}
+
+fn build_paragraph(disable_read_status: bool) -> (Paragraph<'static>, Paragraph<'static>) {
+    let mut keys = vec!["<Enter>".into(), "<Esc> / <q>".into(), "<o>".into()];
+    if !disable_read_status {
+        keys.push("<Space>".into());
+    }
+    keys.extend_from_slice(&[
+        "<Up> / <Down> / <j> / <k>".into(),
+        "<Left> / <Right> / <h> / <l>".into(),
+    ]);
+    let keys = Paragraph::new(keys).centered().blue().bold();
+
+    let mut descs = vec![
+        "Select".into(),
+        "Go Back / Exit".into(),
+        "Open in browser".into(),
+    ];
+    if !disable_read_status {
+        descs.push("Mark/Unmark item in list as read".into());
+    }
+    descs.extend_from_slice(&[
+        "Scroll up / down".into(),
+        "Change focus between item list and content".into(),
+    ]);
+    let descs = Paragraph::new(descs);
+
+    (keys, descs)
 }

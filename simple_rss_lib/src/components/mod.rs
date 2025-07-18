@@ -1,7 +1,7 @@
-mod content;
-mod help;
-mod item_list;
-mod toast;
+pub mod content;
+pub mod help;
+pub mod item_list;
+pub mod toast;
 
 pub use content::Content;
 pub use help::Help;

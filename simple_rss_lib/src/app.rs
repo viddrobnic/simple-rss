@@ -1,15 +1,27 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
+    widgets::Paragraph,
 };
 
-use crate::{components::*, data::Loader, event::*};
+use crate::{
+    components::*,
+    data::{Loader, RefreshStatus},
+    event::*,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Focus {
     ItemList,
     Content,
     Help,
+}
+
+#[derive(Default)]
+pub struct AppConfig {
+    pub item_list_custom_empty_msg: Option<Paragraph<'static>>,
+    pub disable_read_status: bool,
+    pub disable_channel_names: bool,
 }
 
 pub struct App<L: Loader> {
@@ -25,7 +37,12 @@ pub struct App<L: Loader> {
 }
 
 impl<L: Loader + Clone + Send + 'static> App<L> {
-    pub fn new(event_sender: EventSender, data_loader: L, tick_fps: u32) -> Self {
+    pub fn new(
+        config: AppConfig,
+        event_sender: EventSender,
+        data_loader: L,
+        tick_fps: u32,
+    ) -> Self {
         // Start refreshing
         let mut loader = data_loader.clone();
         let sender = event_sender.clone();
@@ -33,8 +50,8 @@ impl<L: Loader + Clone + Send + 'static> App<L> {
             sender.send(Event::Toast(ToastEvent::Loading("Refreshing".to_string())));
             let status = loader.refresh().await;
             match status {
-                crate::data::RefreshStatus::Ok => sender.send(Event::Toast(ToastEvent::Hide)),
-                crate::data::RefreshStatus::Error => sender.send(Event::Toast(ToastEvent::Error(
+                RefreshStatus::Ok => sender.send(Event::Toast(ToastEvent::Hide)),
+                RefreshStatus::Error => sender.send(Event::Toast(ToastEvent::Error(
                     "Failed to refresh data!".to_string(),
                 ))),
             };
@@ -43,10 +60,19 @@ impl<L: Loader + Clone + Send + 'static> App<L> {
         Self {
             focus: Focus::ItemList,
             prev_focus: None,
-            item_list: ItemList::new(true, event_sender, data_loader.clone()),
+            item_list: ItemList::new(
+                true,
+                event_sender,
+                data_loader.clone(),
+                crate::components::item_list::Config {
+                    custom_empty_list_msg: config.item_list_custom_empty_msg,
+                    disable_read_status: config.disable_read_status,
+                    disable_channel_names: config.disable_channel_names,
+                },
+            ),
             content: Content::new(false),
             toast: Toast::new(tick_fps),
-            help: Help::new(),
+            help: Help::new(config.disable_read_status),
         }
     }
 

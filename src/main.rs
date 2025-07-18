@@ -3,7 +3,7 @@ use colored::{ColoredString, Colorize};
 use data::{DataLoader, load_data, save_data};
 use event::{EventTask, TICK_FPS};
 use simple_rss_lib::{
-    app::App,
+    app::{App, AppConfig},
     data::{Channel, Loader},
     event::{Event, EventBus, KeyboardEvent},
 };
@@ -92,7 +92,12 @@ async fn run() -> anyhow::Result<()> {
     tokio::spawn(async move { event_task.run().await });
 
     let data_loader = DataLoader::new()?;
-    let mut app = App::new(event_bus.get_sender(), data_loader.clone(), TICK_FPS as u32);
+    let mut app = App::new(
+        AppConfig::default(),
+        event_bus.get_sender(),
+        data_loader.clone(),
+        TICK_FPS as u32,
+    );
 
     loop {
         let event = event_bus.next().await;
