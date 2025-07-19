@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
-    sync::{Arc, Mutex, MutexGuard},
+    ops::Deref,
+    sync::{self, Arc, Mutex},
 };
 
 use chrono::FixedOffset;
@@ -9,15 +10,33 @@ use simple_rss_lib::data::{Loader, RefreshStatus};
 
 use super::{Channel, Data, Item, load_data};
 
+pub struct LockGuard<'a>(sync::MutexGuard<'a, Data>);
+
+impl<'a> Deref for LockGuard<'a> {
+    type Target = Vec<Item>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.items
+    }
+}
+
 #[derive(Clone)]
 pub struct DataLoader {
     version: Arc<Mutex<u16>>,
     data: Arc<Mutex<Data>>,
 }
 
-impl Loader for DataLoader {
-    fn get_data(&self) -> MutexGuard<Data> {
+impl DataLoader {
+    pub fn get_data(&self) -> sync::MutexGuard<Data> {
         self.data.lock().unwrap()
+    }
+}
+
+impl Loader for DataLoader {
+    type Guard<'a> = LockGuard<'a>;
+
+    fn get_items(&self) -> Self::Guard<'_> {
+        LockGuard(self.data.lock().unwrap())
     }
 
     fn get_version(&self) -> u16 {
@@ -37,11 +56,11 @@ impl Loader for DataLoader {
         let resp = reqwest::get(url).await;
         match resp {
             Err(err) => {
-                format!("Failed loading item: {}", err)
+                format!("Failed loading item: {err}")
             }
             Ok(resp) => match resp.text().await {
                 Ok(data) => data,
-                Err(err) => format!("Failed loading item: {}", err),
+                Err(err) => format!("Failed loading item: {err}"),
             },
         }
     }

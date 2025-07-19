@@ -523,7 +523,7 @@ impl Renderer {
             ExclusiveModifier::OrderedList(idx) => {
                 self.render_new_line(ctx.remove_stackable_modifier(StackableModifier::InsideList));
                 self.lines.last_mut().unwrap().push_span(
-                    Span::from(format!("{}. ", idx)).style(Style::default().fg(Color::Gray)),
+                    Span::from(format!("{idx}. ")).style(Style::default().fg(Color::Gray)),
                 );
             }
         }

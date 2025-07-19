@@ -1,4 +1,4 @@
-use std::sync::MutexGuard;
+use std::ops::Deref;
 
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
@@ -33,9 +33,13 @@ pub enum RefreshStatus {
 }
 
 pub trait Loader {
+    type Guard<'a>: Deref<Target = Vec<Item>> + 'a
+    where
+        Self: 'a;
+
     /// Get data and return read lock.
     /// Warning: This lock shouldn't be used across await.
-    fn get_data(&self) -> MutexGuard<Data>;
+    fn get_items<'a>(&'a self) -> Self::Guard<'a>;
 
     /// Version of the data. Used by items to know when data is changed
     /// and re-render is needed. It is the loader's implementation responsibility

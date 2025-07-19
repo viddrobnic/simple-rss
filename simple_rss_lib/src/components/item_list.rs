@@ -79,9 +79,9 @@ impl<L: Loader> ItemList<L> {
         //  Handle open browser separately, because it's independent of focus.
         if event == KeyboardEvent::Open && !self.config.disable_browser_open {
             if let Some(selected) = self.list_state.selected() {
-                let data = self.data_loader.get_data();
+                let data = self.data_loader.get_items();
 
-                let url = &data.items[selected].link;
+                let url = &data[selected].link;
                 let _ = webbrowser::open(url);
 
                 // Set to read
@@ -109,10 +109,10 @@ impl<L: Loader> ItemList<L> {
             }
             KeyboardEvent::Enter => {
                 if let Some(selected) = self.list_state.selected() {
-                    let data = self.data_loader.get_data();
+                    let data = self.data_loader.get_items();
 
                     // Start loading item
-                    let url = data.items[selected].link.clone();
+                    let url = data[selected].link.clone();
                     let sender = self.event_tx.clone();
                     tokio::spawn(async move {
                         let text = L::load_item(&url).await;
@@ -132,8 +132,8 @@ impl<L: Loader> ItemList<L> {
             }
             KeyboardEvent::Space => {
                 if let Some(selected) = self.list_state.selected() {
-                    let data = self.data_loader.get_data();
-                    let new_read = !data.items[selected].read;
+                    let data = self.data_loader.get_items();
+                    let new_read = !data[selected].read;
 
                     if !self.config.disable_read_status {
                         drop(data); // Drop to avoid race condition
@@ -190,10 +190,9 @@ impl<L: Loader> ItemList<L> {
     }
 
     fn recalculate_render_cache(&mut self, area: Rect) -> &RenderCache {
-        let data = self.data_loader.get_data();
+        let data = self.data_loader.get_items();
         let list = List::new(
-            data.items
-                .iter()
+            data.iter()
                 .map(|it| item_to_list_item(it, area.width as usize, &self.config)),
         )
         .highlight_style(Style::default().bg(Color::DarkGray));

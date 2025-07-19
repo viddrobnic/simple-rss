@@ -58,7 +58,7 @@ impl Toast {
             }
             Event::Tick => match &mut self.state {
                 ToastState::Error { ticks, .. } => {
-                    if *ticks > self.tick_fps as u32 * 5 {
+                    if *ticks > self.tick_fps * 5 {
                         self.state = ToastState::Hidden;
                     } else {
                         *ticks += 1;

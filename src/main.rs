@@ -4,7 +4,7 @@ use data::{DataLoader, load_data, save_data};
 use event::{EventTask, TICK_FPS};
 use simple_rss_lib::{
     app::{App, AppConfig},
-    data::{Channel, Loader},
+    data::Channel,
     event::{Event, EventBus, KeyboardEvent},
 };
 use unicode_width::UnicodeWidthStr;
@@ -241,7 +241,7 @@ fn print_channel(idx: usize, ch: &Channel, name_len: usize) {
     print!("│ ");
 
     if let Some(name) = &ch.name {
-        print!("{}", name);
+        print!("{name}");
     }
 
     let space = name_len - 1 - ch.name.as_ref().map_or(0, |n| n.width());
@@ -258,7 +258,7 @@ fn print_center(len: usize, val: ColoredString) {
     for _ in 0..space {
         print!(" ");
     }
-    print!("{}", val);
+    print!("{val}");
     let space = len - val.chars().count() - space;
     for _ in 0..space {
         print!(" ");
