@@ -171,7 +171,8 @@ impl ContentStateData {
 
         // Scrollbar
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-        let mut bar_state = ScrollbarState::new(cache.lines.len() - 5).position(scroll_offset);
+        let mut bar_state =
+            ScrollbarState::new(cache.lines.len().saturating_sub(5)).position(scroll_offset);
         frame.render_stateful_widget(scroll_bar, area, &mut bar_state);
     }
 
