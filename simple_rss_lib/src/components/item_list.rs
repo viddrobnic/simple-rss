@@ -19,6 +19,7 @@ pub struct Config {
     pub custom_empty_list_msg: Option<Paragraph<'static>>,
     pub disable_read_status: bool,
     pub disable_channel_names: bool,
+    pub disable_browser_open: bool,
 }
 
 pub struct ItemList<L: Loader> {
@@ -76,7 +77,7 @@ impl<L: Loader> ItemList<L> {
 
     fn handle_keyboard_event(&mut self, event: KeyboardEvent) -> EventState {
         //  Handle open browser separately, because it's independent of focus.
-        if event == KeyboardEvent::Open {
+        if event == KeyboardEvent::Open && !self.config.disable_browser_open {
             if let Some(selected) = self.list_state.selected() {
                 let data = self.data_loader.get_data();
 

@@ -22,6 +22,7 @@ pub struct AppConfig {
     pub item_list_custom_empty_msg: Option<Paragraph<'static>>,
     pub disable_read_status: bool,
     pub disable_channel_names: bool,
+    pub disable_browser_open: bool,
 }
 
 pub struct App<L: Loader> {
@@ -68,11 +69,12 @@ impl<L: Loader + Clone + Send + 'static> App<L> {
                     custom_empty_list_msg: config.item_list_custom_empty_msg,
                     disable_read_status: config.disable_read_status,
                     disable_channel_names: config.disable_channel_names,
+                    disable_browser_open: config.disable_browser_open,
                 },
             ),
             content: Content::new(false),
             toast: Toast::new(tick_fps),
-            help: Help::new(config.disable_read_status),
+            help: Help::new(config.disable_read_status, config.disable_browser_open),
         }
     }
 

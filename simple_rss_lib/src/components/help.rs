@@ -18,8 +18,8 @@ pub struct Help {
 }
 
 impl Help {
-    pub fn new(disable_read_status: bool) -> Self {
-        let (keys, descs) = build_paragraph(disable_read_status);
+    pub fn new(disable_read_status: bool, disable_browser_open: bool) -> Self {
+        let (keys, descs) = build_paragraph(disable_read_status, disable_browser_open);
         Self {
             open: false,
             keys,
@@ -87,8 +87,14 @@ impl Help {
     }
 }
 
-fn build_paragraph(disable_read_status: bool) -> (Paragraph<'static>, Paragraph<'static>) {
-    let mut keys = vec!["<Enter>".into(), "<Esc> / <q>".into(), "<o>".into()];
+fn build_paragraph(
+    disable_read_status: bool,
+    disable_browser_open: bool,
+) -> (Paragraph<'static>, Paragraph<'static>) {
+    let mut keys = vec!["<Enter>".into(), "<Esc> / <q>".into()];
+    if !disable_browser_open {
+        keys.push("<o>".into());
+    }
     if !disable_read_status {
         keys.push("<Space>".into());
     }
@@ -98,11 +104,10 @@ fn build_paragraph(disable_read_status: bool) -> (Paragraph<'static>, Paragraph<
     ]);
     let keys = Paragraph::new(keys).centered().blue().bold();
 
-    let mut descs = vec![
-        "Select".into(),
-        "Go Back / Exit".into(),
-        "Open in browser".into(),
-    ];
+    let mut descs = vec!["Select".into(), "Go Back / Exit".into()];
+    if !disable_browser_open {
+        descs.push("Open in browser".into());
+    }
     if !disable_read_status {
         descs.push("Mark/Unmark item in list as read".into());
     }
