@@ -129,7 +129,7 @@ impl<L: Loader + Clone + Send + 'static> App<L> {
                     }
                     Focus::Content | Focus::Help => EventState::Ignored,
                 },
-                KeyboardEvent::Help => {
+                KeyboardEvent::Help if self.focus != Focus::Help => {
                     self.set_focus(Focus::Help);
                     EventState::Handled
                 }
