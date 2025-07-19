@@ -208,7 +208,7 @@ impl Renderer {
             Node::Text(text) => self.render_text(ctx, &text.text),
             Node::Element(element) => match element.name() {
                 "script" | "head" | "noscript" | "img" | "picutre" | "audio" | "video"
-                | "source" => RenderStatus::NotRendered, // ignore
+                | "source" | "svg" => RenderStatus::NotRendered, // ignore
                 "span" | "button" => {
                     self.render_context(ctx, first_char(node));
                     self.render_children(
